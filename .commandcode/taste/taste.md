@@ -1,0 +1,4 @@
+- Giao tiếp bằng tiếng Việt và mong muốn nhận phản hồi bằng tiếng Việt. Confidence: 0.8
+- Muốn kết quả bám sát source code và tài liệu thực tế trong dự án, không trả lời chung chung. Confidence: 0.8
+- Khi phạm vi đánh giá chưa đầy đủ, ưu tiên mở rộng mã nguồn/pipeline để đạt so sánh toàn diện (đủ method × dataset) thay vì thu hẹp phạm vi hay thay thế dữ liệu. Confidence: 0.55
+- Chỉ đưa vào so sánh những công trình đã công bố chính thức (peer-reviewed); loại bỏ phương pháp chỉ là bản preprint. Confidence: 0.8
