@@ -5,10 +5,10 @@
 ## THÔNG TIN CHUNG
 
 **Tên đề tài (Tiếng Việt):**
-Đánh giá thực nghiệm các phương pháp phát hiện bất thường dữ liệu log: So sánh học máy cổ điển, học sâu, mạng nơ-ron đồ thị và mô hình ngôn ngữ lớn
+Đánh giá thực nghiệm các phương pháp phát hiện bất thường dựa trên dữ liệu log: Từ học máy cổ điển đến mô hình ngôn ngữ lớn
 
 **Tên đề tài (Tiếng Anh):**
-An Empirical Evaluation of Log-Based Anomaly Detection Methods: Comparing Classical Machine Learning, Deep Learning, Graph Neural Networks, and Large Language Models
+An Empirical Evaluation of Log-Based Anomaly Detection Methods: From Classical Machine Learning to Large Language Models
 
 ---
 
