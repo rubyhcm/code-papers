@@ -10,9 +10,6 @@
 **Tên đề tài (Tiếng Anh):**
 An Empirical Evaluation of Log-Based Anomaly Detection Methods: Comparing Classical Machine Learning, Deep Learning, Graph Neural Networks, and Large Language Models
 
-**Loại hình nghiên cứu:** Đánh giá thực nghiệm / Benchmarking (Cấp độ 1)
-**Chuẩn mực:** ACM SIGSOFT Empirical Standards cho nghiên cứu đánh giá kỹ thuật phần mềm
-
 ---
 
 ## CHƯƠNG 1: GIỚI THIỆU
@@ -33,8 +30,6 @@ Trong giai đoạn 2024–2025, bài toán LogAD chứng kiến sự bùng nổ 
 | Mạng nơ-ron đồ thị | **Logs2Graph** (ICSE'24 Companion) | OCDiGCN: One-Class Digraph Inception GCN |
 | LLM + RAG bán giám sát | **LogRAG** (ISSRE'24) | DeepSVDD + RAG + LLM tái đánh giá |
 | Thống kê cải tiến | **SemPCA** | PCA++ trên biểu diễn ngữ nghĩa log |
-
-> *Ghi chú: FastLogAD (có mã nguồn trong dự án) cũng nằm trong nhóm học sâu tuần tự, có thể được bổ sung nếu phạm vi cho phép.*
 
 ### 1.2. Vấn đề nghiên cứu và khoảng trống
 
