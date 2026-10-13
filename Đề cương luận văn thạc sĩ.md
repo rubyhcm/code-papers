@@ -5,10 +5,10 @@
 ## PHẦN I — THÔNG TIN CHUNG
 
 **Tên đề tài (Tiếng Việt):**
-Đánh giá thực nghiệm các phương pháp phát hiện bất thường dựa trên dữ liệu log hệ thống sử dụng học sâu
+Đánh giá thực nghiệm các phương pháp phát hiện bất thường dựa trên dữ liệu log: Từ học máy cổ điển đến mô hình ngôn ngữ lớn
 
 **Tên đề tài (Tiếng Anh):**
-An Empirical Evaluation of Deep Learning-Based Log Anomaly Detection Methods
+An Empirical Evaluation of Log-Based Anomaly Detection Methods: From Classical Machine Learning to Large Language Models
 
 ---
 
