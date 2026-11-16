@@ -2,7 +2,7 @@
 
 ## Đánh giá thực nghiệm các phương pháp phát hiện bất thường dựa trên dữ liệu log: Từ học máy cổ điển đến mô hình ngôn ngữ lớn
 
-*An Empirical Evaluation of Log-Based Anomaly Detection Methods: From Classical Machine Learning to Large Language Models*
+_An Empirical Evaluation of Log-Based Anomaly Detection Methods: From Classical Machine Learning to Large Language Models_
 
 ---
 
@@ -10,7 +10,7 @@
 
 ### 1.1. Bối cảnh nghiên cứu
 
-Các hệ thống phần mềm hiện đại (hệ phân tán, siêu máy tính, đám mây, hệ điều hành) sinh ra khối lượng log khổng lồ. Log là nguồn dữ liệu quan trọng bậc nhất để giám sát vận hành, phát hiện sự cố và bảo đảm an ninh hệ thống. Phát hiện bất thường dựa trên log (*log-based anomaly detection – LogAD*) là bài toán tự động phân loại hoặc gắn cờ những bản ghi/chuỗi sự kiện bất thường nhằm rút ngắn thời gian phát hiện lỗi, giảm thiểu thời gian dừng dịch vụ và cảnh báo sớm cho đội vận hành.
+Các hệ thống phần mềm hiện đại (hệ phân tán, siêu máy tính, đám mây, hệ điều hành) sinh ra khối lượng log khổng lồ. Log là nguồn dữ liệu quan trọng bậc nhất để giám sát vận hành, phát hiện sự cố và bảo đảm an ninh hệ thống. Phát hiện bất thường dựa trên log (_log-based anomaly detection – LogAD_) là bài toán tự động phân loại hoặc gắn cờ những bản ghi/chuỗi sự kiện bất thường nhằm rút ngắn thời gian phát hiện lỗi, giảm thiểu thời gian dừng dịch vụ và cảnh báo sớm cho đội vận hành.
 
 Trong vài năm gần đây, bài toán LogAD chứng kiến sự bùng nổ về số lượng phương pháp, đặc biệt từ năm 2024 trở lại đây, với các xu hướng rất khác nhau về mặt kỹ thuật:
 
@@ -77,54 +77,54 @@ Hiện nay chưa có một đánh giá thực nghiệm thống nhất đặt **�
 
 ### 2.1. Khái niệm cơ bản
 
-- Log hệ thống, mẫu log (*log template/event*), chuỗi sự kiện, phiên/session/block.
-- Bất thường điểm (*point anomaly*) và bất thường tập thể (*collective anomaly*).
+- Log hệ thống, mẫu log (_log template/event_), chuỗi sự kiện, phiên/session/block.
+- Bất thường điểm (_point anomaly_) và bất thường tập thể (_collective anomaly_).
 - Các dạng bài toán LogAD: phân loại, phát hiện tuần tự, không giám sát/bán giám sát, trực tuyến và phát hiện sớm.
 - Vai trò của log parsing (Drain) và ảnh hưởng của lỗi parsing tới downstream task.
 
 ### 2.2. Phân loại các họ phương pháp
 
-| Họ kỹ thuật | Đại diện trong dự án | Ý tưởng cốt lõi |
-|---|---|---|
-| Thống kê / học máy cổ điển | SemPCA, LightAD | Biểu diễn đặc trưng (PCA/đếm) + phân loại đơn giản (KNN, DT, SLFN) |
-| Học sâu tuần tự | LogFormer | Pre-train + fine-tune trên chuỗi sự kiện log |
-| Transformer đa phương thức | CoLog | Mã hóa cộng tác nhiều modality của log, học tương tác liên phương thức |
-| Mạng nơ-ron đồ thị | Logs2Graph | Biểu diễn nhóm log thành đồ thị có hướng/trọng số, phát hiện cấp đồ thị |
-| LLM + RAG bán giám sát | LogRAG | One-class (DeepSVDD) phát hiện sơ bộ, LLM+RAG tái đánh giá để giảm FP |
+| Họ kỹ thuật                | Đại diện trong dự án | Ý tưởng cốt lõi                                                         |
+| -------------------------- | -------------------- | ----------------------------------------------------------------------- |
+| Thống kê / học máy cổ điển | SemPCA, LightAD      | Biểu diễn đặc trưng (PCA/đếm) + phân loại đơn giản (KNN, DT, SLFN)      |
+| Học sâu tuần tự            | LogFormer            | Pre-train + fine-tune trên chuỗi sự kiện log                            |
+| Transformer đa phương thức | CoLog                | Mã hóa cộng tác nhiều modality của log, học tương tác liên phương thức  |
+| Mạng nơ-ron đồ thị         | Logs2Graph           | Biểu diễn nhóm log thành đồ thị có hướng/trọng số, phát hiện cấp đồ thị |
+| LLM + RAG bán giám sát     | LogRAG               | One-class (DeepSVDD) phát hiện sơ bộ, LLM+RAG tái đánh giá để giảm FP   |
 
 ### 2.3. Tổng quan sáu phương pháp được đánh giá
 
-| # | Phương pháp | Công bố | Kiến trúc / cơ chế | Kiểu học | Dữ liệu hỗ trợ (theo mã nguồn) |
-|---|---|---|---|---|---|
-| 1 | **CoLog** | Scientific Reports 2025 | Collaborative Transformers + Multi-head Impressed Attention + Modality Adaptation Layer; phát hiện cả point lẫn collective anomaly | Giám sát (phân loại) | Casper-RW, DFRWS (Jhuisi, Nssal), Honeynet 7, Zookeeper, Hadoop, BGL |
-| 2 | **LightAD** | ICSE 2024 | KNN, Decision Tree, SLFN + tiền xử lý đơn giản + tự chọn mô hình | Giám sát (ML cổ điển) | HDFS, BGL, Spirit, Liberty, Thunderbird |
-| 3 | **LogFormer** | AAAI 2024 | Pre-train + tuning pipeline trên Transformer | Tự giám sát + tinh chỉnh | LogHub (HDFS, BGL, Thunderbird, Spirit, OpenStack, …) |
-| 4 | **LogRAG** | ISSRE 2024 | DeepSVDD/DeepOC (one-class) + RAG + LLM tái đánh giá | Bán giám sát | BGL, Spirit |
-| 5 | **Logs2Graph** | ICSE 2024 Companion | OCDiGCN (One-Class Digraph Inception GCN), phát hiện cấp đồ thị + giải thích cấp node | Không giám sát (one-class) | HDFS, Hadoop, Spirit, BGL, Thunderbird |
-| 6 | **SemPCA** | Empirical study | PCA++ (PCA cải tiến) trên biểu diễn log | Không giám sát | HDFS, BGL, Spirit |
+| #   | Phương pháp    | Công bố                 | Kiến trúc / cơ chế                                                                                                                 | Kiểu học                   | Dữ liệu hỗ trợ (theo mã nguồn)                                       |
+| --- | -------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | -------------------------------------------------------------------- |
+| 1   | **CoLog**      | Scientific Reports 2025 | Collaborative Transformers + Multi-head Impressed Attention + Modality Adaptation Layer; phát hiện cả point lẫn collective anomaly | Giám sát (phân loại)       | Casper-RW, DFRWS (Jhuisi, Nssal), Honeynet 7, Zookeeper, Hadoop, BGL |
+| 2   | **LightAD**    | ICSE 2024               | KNN, Decision Tree, SLFN + tiền xử lý đơn giản + tự chọn mô hình                                                                   | Giám sát (ML cổ điển)      | HDFS, BGL, Spirit, Liberty, Thunderbird                              |
+| 3   | **LogFormer**  | AAAI 2024               | Pre-train + tuning pipeline trên Transformer                                                                                       | Tự giám sát + tinh chỉnh   | LogHub (HDFS, BGL, Thunderbird, Spirit, OpenStack, …)                |
+| 4   | **LogRAG**     | ISSRE 2024              | DeepSVDD/DeepOC (one-class) + RAG + LLM tái đánh giá                                                                               | Bán giám sát               | BGL, Spirit                                                          |
+| 5   | **Logs2Graph** | ICSE 2024 Companion     | OCDiGCN (One-Class Digraph Inception GCN), phát hiện cấp đồ thị + giải thích cấp node                                              | Không giám sát (one-class) | HDFS, Hadoop, Spirit, BGL, Thunderbird                               |
+| 6   | **SemPCA**     | Empirical study         | PCA++ (PCA cải tiến) trên biểu diễn log                                                                                            | Không giám sát             | HDFS, BGL, Spirit                                                    |
 
-> *Ghi chú: thông tin "kiểu học" được tổng hợp từ README/kiến trúc mã nguồn; cần đối chiếu chính xác với bài báo gốc khi viết tổng quan chính thức.*
+> _Ghi chú: thông tin "kiểu học" được tổng hợp từ README/kiến trúc mã nguồn; cần đối chiếu chính xác với bài báo gốc khi viết tổng quan chính thức._
 
 ### 2.4. Các bộ dữ liệu đánh giá
 
 Ba bộ dữ liệu chính được chọn từ LogHub, bao phủ ba bối cảnh hệ thống khác nhau:
 
-| Bộ dữ liệu | Loại hệ thống | Đặc điểm |
-|---|---|---|
-| **HDFS_v3** | Hệ phân tán (Hadoop HDFS) | Log namenode, nhãn theo block, chuỗi sự kiện ngắn |
-| **BGL** | Siêu máy tính (BlueGene/L) | Log hệ thống, nhãn theo dòng log, chuỗi dài |
-| **OpenStack** | Nền tảng đám mây (OpenStack) | Log ứng dụng/đám mây, nhãn theo instance |
+| Bộ dữ liệu    | Loại hệ thống                | Đặc điểm                                          |
+| ------------- | ---------------------------- | ------------------------------------------------- |
+| **HDFS_v3**   | Hệ phân tán (Hadoop HDFS)    | Log namenode, nhãn theo block, chuỗi sự kiện ngắn |
+| **BGL**       | Siêu máy tính (BlueGene/L)   | Log hệ thống, nhãn theo dòng log, chuỗi dài       |
+| **OpenStack** | Nền tảng đám mây (OpenStack) | Log ứng dụng/đám mây, nhãn theo instance          |
 
 Ma trận hỗ trợ giữa các phương pháp và bộ dữ liệu (theo mã nguồn hiện tại):
 
-| Phương pháp | HDFS_v3 | BGL | OpenStack |
-|---|---|---|---|
-| CoLog | – (dùng Hadoop, không phải HDFS) | ✓ | ✗ |
-| LightAD | ✓ | ✓ | ✗ |
-| LogFormer | ✓ | ✓ | ✓ |
-| LogRAG | ✗ | ✓ | ✗ |
-| Logs2Graph | ✓ | ✓ | ✗ |
-| SemPCA | ✓ | ✓ | ✗ |
+| Phương pháp | HDFS_v3                          | BGL | OpenStack |
+| ----------- | -------------------------------- | --- | --------- |
+| CoLog       | – (dùng Hadoop, không phải HDFS) | ✓   | ✗         |
+| LightAD     | ✓                                | ✓   | ✗         |
+| LogFormer   | ✓                                | ✓   | ✓         |
+| LogRAG      | ✗                                | ✓   | ✗         |
+| Logs2Graph  | ✓                                | ✓   | ✗         |
+| SemPCA      | ✓                                | ✓   | ✗         |
 
 > **Quyết định thiết kế:** để so sánh đủ sáu phương pháp trên cả ba bộ dữ liệu, luận văn sẽ **mở rộng pipeline đầu vào** cho các phương pháp chưa hỗ trợ OpenStack (CoLog, LightAD, LogRAG, Logs2Graph, SemPCA), đồng thời bổ sung HDFS_v3 cho LogRAG và ánh xạ Hadoop→HDFS cho CoLog. Chi tiết tại Mục 3.3.
 
@@ -149,7 +149,7 @@ Ma trận hỗ trợ giữa các phương pháp và bộ dữ liệu (theo mã n
 
 ### 3.1. Loại hình nghiên cứu
 
-Nghiên cứu đánh giá thực nghiệm / benchmarking (Cấp độ 1), tuân theo nguyên tắc của *ACM SIGSOFT Empirical Standards* cho loại nghiên cứu đánh giá kỹ thuật phần mềm: câu hỏi rõ ràng, giao thức mô tả được, kiểm soát sai lệch, công khai giới hạn và bảo đảm tái lập.
+Nghiên cứu đánh giá thực nghiệm / benchmarking (Cấp độ 1), tuân theo nguyên tắc của _ACM SIGSOFT Empirical Standards_ cho loại nghiên cứu đánh giá kỹ thuật phần mềm: câu hỏi rõ ràng, giao thức mô tả được, kiểm soát sai lệch, công khai giới hạn và bảo đảm tái lập.
 
 ### 3.2. Tiêu chí lựa chọn baseline
 
@@ -191,15 +191,15 @@ Mỗi baseline được ghi nhận đầy đủ: trích dẫn gốc, nhóm phư�
 
 Mỗi chỉ số được định nghĩa rõ đơn vị tính và gắn với RQ tương ứng:
 
-| Chỉ số | Đơn vị / cách tính | RQ liên quan |
-|---|---|---|
-| Precision, Recall, F1 | Cấp mẫu (block/chuỗi/dòng tùy dataset) | RQ1 |
-| PR-AUC | Khi mô hình cho điểm số | RQ1 |
-| False Positive Rate | Tỷ lệ mẫu thường bị báo bất thường | RQ1, RQ5 |
-| Thời gian huấn luyện / suy luận | giây (trên cùng phần cứng) | RQ3 |
-| Bộ nhớ đỉnh | MB/GB | RQ3 |
-| F1/Recall theo tiền tố | Tại 10%, 25%, 50%, 75%, 100% chuỗi | RQ4 |
-| Taxonomy lỗi FP/FN | Phân nhóm có tiêu chí rõ | RQ5 |
+| Chỉ số                          | Đơn vị / cách tính                     | RQ liên quan |
+| ------------------------------- | -------------------------------------- | ------------ |
+| Precision, Recall, F1           | Cấp mẫu (block/chuỗi/dòng tùy dataset) | RQ1          |
+| PR-AUC                          | Khi mô hình cho điểm số                | RQ1          |
+| False Positive Rate             | Tỷ lệ mẫu thường bị báo bất thường     | RQ1, RQ5     |
+| Thời gian huấn luyện / suy luận | giây (trên cùng phần cứng)             | RQ3          |
+| Bộ nhớ đỉnh                     | MB/GB                                  | RQ3          |
+| F1/Recall theo tiền tố          | Tại 10%, 25%, 50%, 75%, 100% chuỗi     | RQ4          |
+| Taxonomy lỗi FP/FN              | Phân nhóm có tiêu chí rõ               | RQ5          |
 
 ### 3.8. Thiết kế đánh giá phát hiện sớm (RQ4)
 
@@ -239,13 +239,13 @@ Mỗi chỉ số được định nghĩa rõ đơn vị tính và gắn với RQ
 
 ### 4.2. Các câu hỏi mà kết quả dự kiến trả lời
 
-| RQ | Đầu ra dự kiến |
-|---|---|
-| RQ1 | Bảng chỉ số và xếp hạng hiệu quả phát hiện |
+| RQ  | Đầu ra dự kiến                                  |
+| --- | ----------------------------------------------- |
+| RQ1 | Bảng chỉ số và xếp hạng hiệu quả phát hiện      |
 | RQ2 | Phân tích thay đổi thứ hạng giữa các bộ dữ liệu |
-| RQ3 | Bảng đánh đổi độ chính xác – chi phí tính toán |
-| RQ4 | Đường cong hiệu quả theo tiền tố chuỗi log |
-| RQ5 | Taxonomy lỗi và đánh giá khả năng giải thích |
+| RQ3 | Bảng đánh đổi độ chính xác – chi phí tính toán  |
+| RQ4 | Đường cong hiệu quả theo tiền tố chuỗi log      |
+| RQ5 | Taxonomy lỗi và đánh giá khả năng giải thích    |
 
 ### 4.3. Đóng góp thực nghiệm dự kiến
 
@@ -267,27 +267,27 @@ Mỗi chỉ số được định nghĩa rõ đơn vị tính và gắn với RQ
 
 ## 5. KẾ HOẠCH THỰC HIỆN (dự kiến 6 tháng)
 
-| Giai đoạn | Công việc | Đầu ra / điều kiện hoàn thành |
-|---|---|---|
-| Tháng 1 | Tổng quan tài liệu, xác định phạm vi, xây dựng RQ | Bảng tổng hợp 6 phương pháp + RQ được chốt |
-| Tháng 2 | Chọn dataset, chuẩn hóa tiền xử lý và giao thức | Pipeline tiền xử lý + giao thức được ghi lại |
-| Tháng 3 | Tái lập 6 phương pháp; mở rộng pipeline đầu vào cho OpenStack/HDFS_v3 | Từng baseline chạy được trên cả 3 dataset, kết quả sơ bộ hợp lệ |
-| Tháng 4 | Chạy benchmark chính | Kết quả thô, cấu hình, log, bảng kết quả ban đầu |
-| Tháng 5 | Phân tích sâu (RQ2–RQ5), kiểm tra độ ổn định | Phân tích RQ, kiểm tra độ tin cậy và giới hạn |
-| Tháng 6 | Viết, rà soát, hoàn thiện mã và tài liệu tái lập | Bản luận văn + phụ lục thực nghiệm |
+| Giai đoạn | Công việc                                                             | Đầu ra / điều kiện hoàn thành                                   |
+| --------- | --------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Tháng 1   | Tổng quan tài liệu, xác định phạm vi, xây dựng RQ                     | Bảng tổng hợp 6 phương pháp + RQ được chốt                      |
+| Tháng 2   | Chọn dataset, chuẩn hóa tiền xử lý và giao thức                       | Pipeline tiền xử lý + giao thức được ghi lại                    |
+| Tháng 3   | Tái lập 6 phương pháp; mở rộng pipeline đầu vào cho OpenStack/HDFS_v3 | Từng baseline chạy được trên cả 3 dataset, kết quả sơ bộ hợp lệ |
+| Tháng 4   | Chạy benchmark chính                                                  | Kết quả thô, cấu hình, log, bảng kết quả ban đầu                |
+| Tháng 5   | Phân tích sâu (RQ2–RQ5), kiểm tra độ ổn định                          | Phân tích RQ, kiểm tra độ tin cậy và giới hạn                   |
+| Tháng 6   | Viết, rà soát, hoàn thiện mã và tài liệu tái lập                      | Bản luận văn + phụ lục thực nghiệm                              |
 
 ---
 
 ## 6. TÀI LIỆU THAM KHẢO (dự kiến)
 
-1. Nasirzadeh, M., Tahmoresnezhad, J., & Rashidi-Khazaee, P. (2025). *A unified framework for detecting point and collective anomalies in operating system logs via collaborative transformers.* Scientific Reports, 15, Article 27693. (CoLog)
-2. Yu, B., Yao, J., Fu, Q., et al. (2024). *Deep Learning or Classical Machine Learning? An Empirical Study on Log-Based Anomaly Detection.* ICSE 2024. (LightAD)
-3. Guo, H., Yang, J., Liu, J., et al. (2024). *LogFormer: A Pre-train and Tuning Pipeline for Log Anomaly Detection.* AAAI 2024.
-4. *Leveraging RAG-Enhanced Large Language Model for Semi-Supervised Log Anomaly Detection.* (2024). ISSRE 2024. (LogRAG)
-5. Li, Z., Shi, J., & van Leeuwen, M. (2024). *Graph Neural Networks based Log Anomaly Detection and Explanation.* ICSE-Companion 2024. (Logs2Graph)
-6. *Try with Simpler – An Evaluation of Improved Principal Component Analysis in Log-based Anomaly Detection.* (SemPCA)
-7. He, P., Zhu, J., Zheng, Z., & Lyu, M. R. (2017). *Drain: An Online Log Parsing Approach with Fixed Depth Tree.* ICWS 2017.
-8. LogPAI. *LogHub — A Large Collection of System Log Datasets.* https://github.com/logpai/loghub (bộ dữ liệu HDFS_v3, BGL, OpenStack).
+1. Nasirzadeh, M., Tahmoresnezhad, J., & Rashidi-Khazaee, P. (2025). _A unified framework for detecting point and collective anomalies in operating system logs via collaborative transformers._ Scientific Reports, 15, Article 27693. (CoLog)
+2. Yu, B., Yao, J., Fu, Q., et al. (2024). _Deep Learning or Classical Machine Learning? An Empirical Study on Log-Based Anomaly Detection._ ICSE 2024. (LightAD)
+3. Guo, H., Yang, J., Liu, J., et al. (2024). _LogFormer: A Pre-train and Tuning Pipeline for Log Anomaly Detection._ AAAI 2024.
+4. _Leveraging RAG-Enhanced Large Language Model for Semi-Supervised Log Anomaly Detection._ (2024). ISSRE 2024. (LogRAG)
+5. Li, Z., Shi, J., & van Leeuwen, M. (2024). _Graph Neural Networks based Log Anomaly Detection and Explanation._ ICSE-Companion 2024. (Logs2Graph)
+6. _Try with Simpler – An Evaluation of Improved Principal Component Analysis in Log-based Anomaly Detection._ (SemPCA)
+7. He, P., Zhu, J., Zheng, Z., & Lyu, M. R. (2017). _Drain: An Online Log Parsing Approach with Fixed Depth Tree._ ICWS 2017.
+8. LogPAI. _LogHub — A Large Collection of System Log Datasets._ https://github.com/logpai/loghub (bộ dữ liệu HDFS_v3, BGL, OpenStack).
 9. ACM SIGSOFT Empirical Standards (dùng cho thiết kế và báo cáo nghiên cứu thực nghiệm).
 
 ---
