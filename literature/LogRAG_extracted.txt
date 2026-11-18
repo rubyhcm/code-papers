@@ -1,0 +1,1363 @@
+=== PAGE 1 ===
+Leveraging RAG-Enhanced Large Language Model
+for Semi-Supervised Log Anomaly Detection
+Wanhao Zhang†, Qianli Zhang*†‡, Enyu Yu§, Yuxiang Ren*§, Yeqing Meng†, Mingxi Qiu†, Jilong Wang†‡
+† Institute for Network Sciences and Cyberspace, BNRist, Tsinghua University, Beijing, China
+‡ Zhongguancun Laboratory, Beijing, China
+§ Advance Computing and Storage Lab, Huawei Technologies, China
+{zwh22, meng-yq21, choumx23}@mails.tsinghua.edu.cn,
+{zhang, wjl}@cernet.edu.cn, {yuenyu, renyuxiang1}@huawei.com
+Abstract—Log-based anomaly detection is critical in moni-
+toring the operations of information systems and in the real-
+time reporting of system failures. Utilizing deep learning-based
+log anomaly detection methods facilitates effective detection of
+anomalies within logs. However, existing methods are greatly
+dependent on log parsers, and parsing errors can considerably
+affect downstream anomaly detection tasks. Additionally, meth-
+ods that predict the next log event in a sequence are susceptible
+to the instability of sequences and the emergence of unseen logs
+as systems evolve, resulting in a higher false positive rate. In this
+paper, we put forward LogRAG, a semi-supervised log anomaly
+detection framework based on retrieval-augmented generation
+(RAG). This framework conducts phased detection using both
+Log Tokens and Log Templates to mitigate the impact of log
+parsing errors. It also utilizes a single-class classifier to model the
+normal behavior of the system, thereby circumventing the effects
+of unstable sequences. Finally, it employs large language model
+(LLM) empowered by RAG to reevaluate detected anomalous
+logs, thereby improving accuracy. LogRAG demonstrates a 15%
+improvement in F1 Score on the BGL dataset and a 60%
+improvement on the Spirit dataset when compared to the previous
+best semi-supervised learning algorithm.
+Index Terms—Log Analysis, Log Anomaly Detection, Deep
+Learning, Large Language Model, Retrieval-Augmented Gener-
+ation
+I. INTRODUCTION
+As networks and systems become more complex, the fre-
+quency of faults and exceptions increases. These issues not
+only compromise user experience but may also lead to system
+crashes. With the growing intricacy of these systems, manual
+fault detection becomes increasingly impractical. Log files,
+crucial for recording the runtime states of these systems, are
+essential in the automated detection and prediction of system
+anomalies. Log files record the runtime states of these systems,
+and the prevailing approach to detecting and predicting system
+anomalies relies on automated log analysis. Therefore, logs are
+currently widely used in automated monitoring methods for
+anomaly detection [1]–[3], root cause analysis [4]–[6], failure
+prediction [7], and other system automation processes [8]. In
+this paper, our primary focus lies on log anomaly detection
+methods utilizing deep learning. [9]
+* Qianli Zhang and Yuxiang Ren are the corresponding authors.
+An anomalous log signifies the presence of an anomaly in
+the network or system [10]. Log anomaly detection typically
+involves converting unstructured log information into struc-
+tured data for analysis, and the process commonly referred to
+as log parsing or log template extraction [11]. After acquiring
+structured log data, deep learning methods are used for system
+modeling. Common approaches [1], [12]–[14] to log anomaly
+detection typically include predicting the next log event in
+a sequence and comparing it with the actual log events to
+identify anomalies. Those methods that model the system’s
+operational state based on log sequences and utilize them
+for anomaly detection have achieved commendable results
+on public datasets. However, in real-world scenarios, merely
+identifying anomalies within a specific window at a coarse
+granularity often proves insufficient. Furthermore, sequence
+models employed for anomaly detection lack the capability for
+flexible adjustment of detection granularity. Consequently, this
+paper primarily concentrates on exploring anomaly detection
+methods that do not rely on log sequences.
+Nevertheless, existing methods face three main challenges.
+(1)Log parsing errors. Current log anomaly detection methods
+heavily depend on log parsers. However, log parsers may
+not accurately parse keywords and parameters, leading to
+the omission of crucial semantic information. These semantic
+details could be crucial for determining whether a log is
+anomalous or not. As shown in Fig.1, parsing errors can lead
+to the loss of key information, such as interrupt, in the original
+logs. This results in parsed data that is unable to distinguish be-
+tween normal and anomalous conditions. Minor parsing errors
+can significantly impact downstream anomaly detection tasks
+[15]. (2) Sequence modeling difficulty. Unstable sequences
+...
+machine check enable
+(Normal log)
+...
+machine check interrupt
+(Abnormal log)
+...
+...
+machine check  <*>
+(Log Parsing Result) 
+...
+Log Parsing
+Fig. 1: Log Parsing Errors
+168
+2024 IEEE 35th International Symposium on Software Reliability Engineering (ISSRE)
+2332-6549/24/$31.00 ©2024 IEEE
+DOI 10.1109/ISSRE62328.2024.00026
+2024 IEEE 35th International Symposium on Software Reliability Engineering (ISSRE) | 979-8-3503-5388-4/24/$31.00 ©2024 IEEE | DOI: 10.1109/ISSRE62328.2024.00026
+Authorized licensed use limited to: IMT - Alti Studi Lucca. Downloaded on October 12,2026 at 02:17:29 UTC from IEEE Xplore.  Restrictions apply. 
+
+=== PAGE 2 ===
+occur when log messages are misaligned with the expected
+execution order of a program. As mentioned in EvLog [16],
+these sequences can result from interleaved log messages
+across different threads, the introduction of new log events
+due to software updates, or system evolution. Existing methods
+often rely on sequence modeling, but these approaches may
+struggle to address the instability induced by these factors. On
+the other hand, sequence modeling methods must train models
+using log sequences of specified window sizes, thus precluding
+flexible adjustment of the granularity of the anomaly detection
+window. (3)Unseen logs issue. As systems evolve, a signif-
+icant number of ”unseen logs” [14], [17] can emerge during
+the training phase. Numerous studies have investigated the
+issue of unseen logs. For instance, LogOnline [17] utilized
+the BGL dataset to examine this issue, revealing that only
+10.1% of log events remained unchanged, while over 40% of
+the 1532 unique log events were classified as dissimilar under
+its experimental conditions. Existing methods often struggle to
+adapt to these unseen logs, leading to the misclassification of
+numerous unseen normal logs as anomalies and consequently
+generating a significant number of false positives.
+To address the above challenges, we present LogRAG, a
+semi-supervised log anomaly detection framework that utilizes
+RAG for post-processing. Similar to other semi-supervised
+learning methods, LogRAG only requires training with logs
+from the system’s normal operation state, tolerating a small
+amount of anomalous logs without the need for manually
+labeled data. By utilizing Log Tokens (In Section III-B2, this
+will be explained in detail.), LogRAG mitigates the risk of
+log parsing errors, while the deep single-class classifier learns
+the system’s normal behavior without relying on sequence
+information, thereby mitigating the impact of unstable log
+sequences. Subsequently, for logs detected as anomalies, we
+design a post-processing stage based on RAG for reevaluation.
+Through retrieving abnormal log templates from historical
+normal data, constructing prompts, and utilizing LLM for
+anomaly detection, LogRAG significantly decreases false pos-
+itives.
+Experiments were conducted on two widely used datasets
+to validate LogRAG’s effectiveness. LogRAG outperformed
+nearly all semi-supervised methods and even exceeded su-
+pervised methods in certain scenarios. Additionally, we in-
+vestigated the improvement in precision for online anomaly
+detection scenarios using RAG with LogRAG. Furthermore,
+we assessed the contributions of different components within
+LogRAG.
+Our contributions can be summarized as follows:
+• We utilize Log Tokens and Log Templates separately in
+the anomaly detection and post-processing stages, thus
+reducing the computational overhead of Log Templates
+parsing and mitigating the impact of parsing errors.
+• We employ a deep single-class classifier to model the
+normal operation of the system without the need for
+log sequence modeling, thereby enhancing adaptability
+to changes in system states.
+• By incorporating LLM and designing retrieval strategies
+and prompts, we introduce the first application of RAG in
+the post-processing stage of log anomaly detection. This
+significantly reduces false positives generated by semi-
+supervised anomaly detection, thereby reducing the cost
+of manual judgment.
+The rest of the paper is organized as follows. Section II
+summarizes related research work. Section III describes our
+method. Section IV presents our experimental design and
+results. Section V is the case study part. Section VI discusses
+threats to validity. Section VII concludes the entire study.
+II. RELATED WORK
+A. Deep learning-based anomaly detection
+In recent years, log anomaly detection methods based on
+deep learning have been proposed with the aim of automat-
+ically detecting defects and faults present in system logs.
+Supervised methods train models to discern whether unknown
+logs are normal or abnormal, utilizing a large amount of fully
+labeled log data. NeuralLog [15] detects anomalies in log
+data by directly converting raw log messages into semantic
+vectors and using a Transformer-based model, bypassing the
+need for log parsing and improving accuracy with OOV
+(out-of-vocabulary) words. LogRobust [14] addresses log data
+instability by transforming log events into semantic vectors
+and employing an attention-based Bi-LSTM model to robustly
+detect anomalies in the presence of evolving log statements
+and processing noise. SwissLog [18] uses a dictionary-based
+parser and BERT to create semantic and temporal embeddings,
+which are then analyzed by an Attention-based Bi-LSTM
+model to detect anomalies in system logs. Lu et al. [19]
+present a CNN-based approach for anomaly detection in big
+data system logs. However, in practice, obtaining labeled logs
+is challenging, and as the system evolves, the labels for the
+logs may also change.
+In contrast, semi-supervised learning methods typically only
+require logs from the system operating under normal condi-
+tions. These methods train a model that represents normal
+operation, and logs that deviate from this normal model are
+considered anomalies. DeepLog [1] employs a deep neural
+network model with LSTM to treat system logs as natural
+language sequences. This allows the model to learn normal
+log patterns and detect anomalies when deviations from these
+patterns occur. LogAnomaly [12] introduces a framework
+that models log streams as natural language sequences and
+employs template2vec, a novel method to extract semantic
+information from log templates. It is capable of detecting
+both sequential and quantitative anomalies simultaneously,
+avoiding false alarms caused by new log templates appearing
+between periodic model retraining. PLELog [13] is a semi-
+supervised approach that only requires labels for a subset of
+normal log sequences. It utilizes probabilistic label estimation
+to incorporate knowledge of historical anomalies and remains
+robust to unstable log data through semantic embedding. An
+attention-based GRU neural network [20] is designed for
+169
+Authorized licensed use limited to: IMT - Alti Studi Lucca. Downloaded on October 12,2026 at 02:17:29 UTC from IEEE Xplore.  Restrictions apply. 
+
+=== PAGE 3 ===
+efficient and effective anomaly detection. LogOnline [17] is
+a semi-supervised anomaly detector that leverages an online
+learning mechanism to continuously learn normal sequence
+patterns as new log sequences emerge. Nedelkoski et al. [21]
+proposes an attention-based encoder model with a hyperspher-
+ical loss function for learning compact log representations.
+It captures intrinsic differences between normal and anomaly
+logs, improving generalization and reducing false predictions.
+Semi-supervised learning methods do not require extensive
+manual labeling; however, they often rely on the sequential
+information in logs to model normal system operation. Never-
+theless, those approaches are particularly challenging in real-
+world scenarios, as systems are constantly changing, making
+it difficult to accurately model them using sequence mod-
+els. Consequently, applying these methods for log anomaly
+detection may lead to a substantial number of false alarms.
+Our semi-supervised approach does not require modeling log
+sequences, making it adaptable to more complex and dynamic
+real-world situations.
+B. LLM for log analysis
+The comprehension abilities of large language models have
+seen rapid improvement in recent years. There have been
+numerous attempts to apply large language models to the
+field of log analysis, including their application in log parsing
+tasks [22]–[24]. Additionally, some efforts have been made to
+utilize large language models for log anomaly detection. Log-
+Prompt [25] leverages LLMs and advanced prompt strategies
+to perform zero-shot log analysis tasks, thereby significantly
+improving performance and interpretability without requiring
+in-domain training data. LogGPT [26] utilizes ChatGPT to
+detect anomalies in log data, demonstrating promising results
+and good interpretability. It represents the first attempt to use
+ChatGPT for log-based anomaly detection, providing insights
+into the potential of prompt-based models in this domain.
+ScaleAD [27] is an anomaly detection framework that utilizes
+a Trie-based Detection Agent for efficiency and integrates
+feedback from LLMs, such as ChatGPT, to improve accuracy
+and adaptability in identifying system anomalies in log data.
+At the same time, LLM has been applied to other areas of
+data mining [28]–[31] and log analysis [32], showing a strong
+ability to solve existing problems.
+However, directly applying LLMs for zero-shot log analysis
+tasks often leads to suboptimal results. This is because LLM is
+pre-trained on extensive corpora, and when applied in specific
+vertical domains, errors in judgment may occur due to the lack
+of domain-specific pre-training knowledge. Therefore, we pro-
+pose the Retrieval-Augmented Generation (RAG) model [33].
+The RAG model enhances LLMs by incorporating a retrieval
+mechanism, enabling it to retrieve relevant information from
+extensive knowledge bases and generate results tailored to spe-
+cific tasks. This combined retrieval and generation approach
+helps address the issue of lacking prior knowledge in zero-shot
+tasks, improving the model’s adaptability and performance in
+vertical domains. By leveraging RAG, we are able to better
+tackle the challenges in log analysis tasks, enhancing the
+accuracy and reliability of the framework.
+III. DESIGN OF LOGRAG
+A. Overview
+The framework of LogRAG, shown in Fig. 2, consists of
+four stages: Log Processing stage, Log Representation Stage,
+Anomaly Detection Stage, and Post Processing Stage using
+RAG. We first use the log parsing technique to get the contents
+and templates from raw logs in the Log Processing Stage. Then
+in the Log Representation Stage, contents and templates will
+be encoded in different ways to get the feature vector. For
+the Anomaly Detection Stage, we use the pre-trained BERT
+to encode the Log Token, which is then used to train a Deep
+One-Class Classification model. However, a one-class model
+usually determines all the logs that do not appear in the train
+stage as anomalies, resulting in a high false positive rate. To
+solve this problem, we introduce RAG in the post-processing
+stage. We will use the log template at this stage because it
+preserves more semantics without incurring excessive costs.
+For the logs identified as abnormal by the one-class model, we
+will retrieve the similar logs in the historical logs, construct
+a prompt, and further judge whether the log is abnormal by
+combining the understanding ability of LLM.
+B. Log Processing
+Logs are semi-structured or unstructured texts, containing
+various fields such as timestamp, severity level, and raw mes-
+sage. The parameters contained in raw logs such as block id
+and ip address may hinder further log analysis [34], thus
+before implementing anomaly detection, we need to use log
+parsing technique to convert the raw logs into structured data.
+In this work, we adopt Drain [35] for log parsing and use two
+parts of parsed logs: Log Templates, Log Tokens.
+1) Log Templates: Log parsing plays crucial roles in large-
+scale log processing. Through log parsing, we can identify
+common structures and semantics in logs and abstract them
+into template forms, thereby effectively compressing and sim-
+plifying logs. This abstraction not only helps to reduce the
+storage cost of logs but also optimizes subsequent log analysis
+processes, thereby improving the learning efficiency of models
+on key information. Log templates not only reduce redundant
+information, allowing anomaly detection models to focus more
+on critical Log Token for improving detection accuracy and
+efficiency but also lower the costs of model training and
+LLM invocation. Additionally, for natural language processing
+models such as LLMs, simplified log formats improve their
+efficiency and speed in processing input text. This prepro-
+cessing stage lays a more reliable foundation for subsequent
+log analysis and anomaly detection while optimizing system
+performance and resource utilization.
+2) Log Tokens: For LLM, it is convenient to obtain the
+semantic information through log templates, but the log parser
+usually has some parsing error cases, and these parsing errors
+will greatly affect the performance of anomaly detection [15].
+Therefore, in the anomaly detection stage, Log Tokens are
+170
+Authorized licensed use limited to: IMT - Alti Studi Lucca. Downloaded on October 12,2026 at 02:17:29 UTC from IEEE Xplore.  Restrictions apply. 
+
+=== PAGE 4 ===
+      Log Tokens
+{alignment,exceptions}
+{iar, dear}
+{no, such, file, in}
+{generating, core}
+{tlb, error, interrupt}
+{detected, at}
+Log Representation
+Stage
+Anomaly Detection Stage
+Pretrained
+LM
+Anomaly Logs
+Retriever
+Post Processing Stage using RAG
+LLMVector DB
+Query
++Context
+    Log Templates
+<*> alignment exceptions
+Iar <*> dear <*>
+No such file <*> in <*>
+Generating core.<*>
+TLB error interrupt
+Int2str detected at <*> 
+Log Processing Stage
+LLM
+Embedding
+Deep OC Classifier
+Alarms
+Fig. 2: The overview of LogRAG. It processes logs into Log Tokens and Log Templates. Log Tokens are encoded using pre-
+trained language models, while Log Templates are encoded using LLM Embedding. In the training phase, a deep one-class
+classifier model is constructed using Log Tokens, and Log Templates are stored in a Vector database. In the detection phase,
+test data is passed through the classifier, and anomalies undergo Post Processing using RAG for final anomaly detection.
+employed for model training and inference instead of Log
+Templates. This strategy effectively mitigates the influence
+of parsing errors associated with log templates. Inspired by
+NeuralLog [15], to get the Log Token of each raw log, we
+first split the log content into a set of tokens using some
+common delimiters, such as spaces, commas, and periods.
+Then we remove all the non-character tokens(i.e., delimiters,
+digital number, and operators.) from word set, cause those
+non-character tokens are hard to be captured by pretrained
+language model. Then we convert every capital letter to a
+lower letter. In the remaining tokens, there could be composite
+units formed by concatenating English words, a byproduct of
+programming conventions. To manage these composite units,
+we utilize camel case splitting [36].
+C. Log Representation
+In the Log Representation phase, we need to extract mean-
+ingful semantic representations from both Log Tokens and Log
+Templates using pre-trained models. While some pre-trained
+language models like BERT [37] have undergone meticulous
+training on extensive text data, directly applying these models
+for semantic extraction on specific domain data (in this paper,
+logs) may not be adequate. Therefore, it is necessary to fine-
+tune or pre-train these models on log data. Several works have
+utilized large-scale log data to pre-train language models [16],
+[38], [39]. Here, we directly utilize the pre-trained model from
+BigLog [39] to encode Log Tokens.
+To ensure a comprehensive understanding of log data, it
+is crucial to embed log templates alongside encoding Log
+Tokens. Aligning the embedding method with the LLM used
+in subsequent processing ensures consistency in semantic
+representation between Log Tokens and Log Templates. This
+alignment not only deepens our understanding of queries,
+contexts, and relationships within log templates but also
+streamlines the entire log processing pipeline. Maintaining
+consistency between the embedding method and the LLM
+model used for post-processing facilitates smoother integration
+and interpretation of log data, ultimately leading to more
+accurate and insightful analyses. In our implementation, we
+use OpenAI’s text-embedding-ada-002 model1 to achieve this
+embedding.
+D. Log Anomaly Detection
+Existing unsupervised or semi-supervised log anomaly de-
+tection methods attempt to model the sequences of normal
+logs from the training data and then predict future log events to
+determine if a log is anomalous. However, logs generated by a
+system are unknown, and it is impractical to model all possible
+sequence scenarios. Therefore, we adopt a novel approach:
+modeling the normality of normal logs, without the need for
+complex log sequence information.
+Motivated by Huo et al. [16], we utilize DeepSVDD [40] as
+the backbone for learning the normality of normal logs in the
+anomaly detection model training. DeepSVDD is particularly
+suited for this task because it simplifies the problem of
+anomaly detection to a one-class classification model, where
+the main objective is to enclose the data points from the
+’normal’ class within a minimal hypersphere in the feature
+space. This method offers a robust way to capture the compact
+and common features of normal logs, as it pushes anomalies,
+which do not conform to the normal log pattern, outside the
+hypersphere.
+In the specific context of our task, our objective is to map
+the features of normal log templates to the interior of a hyper-
+sphere using a neural network. Normal log templates should
+ideally be close to the center of the hypersphere. To achieve
+1https://platform.openai.com/docs/guides/embeddings
+171
+Authorized licensed use limited to: IMT - Alti Studi Lucca. Downloaded on October 12,2026 at 02:17:29 UTC from IEEE Xplore.  Restrictions apply. 
+
+=== PAGE 5 ===
+Your task is to determine whether the input log template is normal or anomaly. 
+Input Log Template:  {Input Log Template} 
+Known Normal Log Templates: {Topk Known Normal Log Templates}
+Perform the following steps to check whether the input log template is abnormal:
+1. Compare the Input Log Template with each of the Known Normal Log Templates.
+2. Determine if the input Log Template is structurally and semantically identical or very similar to the Known 
+Normal Log Templates.
+   - If yes, classify the Input Log Template as Normal. \n - If no, proceed to step 3.
+3. Analyze the Input Log Template independently and provide an assessment:
+   - You need to carefully check the text content for keywords. Identify key elements such as error codes, status 
+      messages, and other significant terms.
+   - In the log template, the parameters are replaced by <*>, so you should never consider <*> and missing values 
+     as the reason for abnormal log.
+NOTE: Provide a high-confidence binary classification: 0 for normal and 1 for anomaly. You should generate 
+reasons for your judgment.
+Output format: Return back in JSON format, including keys: is_anomaly, reason: describes why the log is normal 
+or abnormal. \n Answer:
+<CoT 
+Judgement 
+Process>
+<Input 
+Templates>
+<Output 
+Format>
+<Task 
+Description>
+Fig. 3: Prompt Format: <Task Description>, <Input Templates>, <CoT Judgement Process>, <Output Format>
+the above goal, the objective function is presented in Eq. (1).
+This approach is especially advantageous in handling high-
+dimensional log data where modeling sequences is impractical.
+min
+R,W
+R2 + 1 νn
+nX
+i=1
+max
+n
+0, ∥ϕ (xi; W) − c∥2 − R2
+o
++ λ 2
+LX
+ℓ=1
+W ℓ  2
+F
+(1)
+Given some training data Dn = {x1, . . . , xn} on X,
+where X ⊆ Rd, ϕ (xi; W) represents using a neural network
+mapping function ϕ (·; W) with parameter W to map each
+input log template xi to a hyperspace. The center and radius
+of the hypersphere are denoted by c and R, respectively. The
+hyperparameter ν ∈ (0, 1] controls the balance between mini-
+mizing the hypersphere’s volume and allowing some points to
+fall outside the sphere. The regularization term with weight λ
+is used to prevent overfitting. The core objective is to ensure
+that the samples lie within the smallest possible hypersphere
+in the mapped hyperspace.
+score(x) = ∥ϕ (x; W ∗) − c∥2 − R2 (2)
+In the anomaly detection stage, we use the distance be-
+tween a log template and the hypersphere’s center as the
+basis for determining anomaly status. As shown in Eq. (2),
+∥ϕ (x; W ∗) − c∥2 represents the distance from the log tem-
+plate x being examined to the center of the hypersphere. We
+subtract the radius of the hypersphere from this distance to the
+center of the hypersphere, which serves as the anomaly score
+for the log template. When this score is less than 0, it indicates
+that the log template point lies inside the hypersphere, and we
+consider it a normal template. Otherwise, if the score is greater
+than or equal to 0, we consider it an abnormal template.
+E. Post-processing Using RAG
+After the anomaly detection stage, we can identify a
+significant number of abnormal logs. However, due to the
+characteristics of the single-class model, this stage tends to
+classify normal logs that have not appeared in historical data
+as anomalies directly, leading to a high false positive rate. To
+address this issue, the logs identified by the anomaly detection
+stage as anomalies need to undergo further examination. In our
+implementation, we first store the vector representation of the
+Log Templates obtained through the Log Representation Stage
+in a vector database, then we employ Retrieval-Augmented
+Generation (RAG) to perform a secondary assessment of the
+logs identified as anomalies in the anomaly detection stage.
+Specifically, for each anomalous log detected in the anomaly
+detection stage, we obtain its log template. Subsequently, we
+retrieve the log with the highest similarity to the template from
+the vector database. Following that, we construct a prompt
+based on the logs to be evaluated and the retrieval results,
+leveraging the comprehension capabilities of large language
+models, to make a final determination on whether the log is
+anomalous.
+1) Retrieve Strategies: In our implementation, efficient
+retrieval of log templates similar to the log under consideration
+from the vector database is crucial. To achieve this, we
+employ cosine distance as our metric to calculate the similarity
+between two vectors, vi and vj as depicted in Eq.(3). Cosine
+distance is chosen due to its effectiveness in high-dimensional
+spaces commonly found in text-related tasks, allowing for
+a measurement that is more robust to variations in vector
+magnitude:
+Similarity(vi, vj ) = vi · vj ∥vi∥ · ∥vj ∥ (3)
+To ensure the relevance and precision of our retrieval, we
+constrain the process by setting a similarity threshold and spec-
+ifying the desired number of retrieval results. Specifically, we
+only consider templates for which the cosine similarity score
+exceeds 0.8. This threshold was determined based on empirical
+tests that showed it effectively balances between precision and
+recall, optimizing for the most relevant results without overly
+narrowing the search scope. As a result, we designate the top 5
+172
+Authorized licensed use limited to: IMT - Alti Studi Lucca. Downloaded on October 12,2026 at 02:17:29 UTC from IEEE Xplore.  Restrictions apply. 
+
+=== PAGE 6 ===
+templates that meet this criterion as the final retrieval results.
+This strategy allows us to maintain high retrieval efficiency
+and accuracy, facilitating better performance in downstream
+processing.
+2) Prompt Construction: As described in Logprompt [25],
+when it comes to handling log analysis tasks, the chain of
+thought (CoT) [41] method can standardize the intermediate
+reasoning process in LLM, leading to more accurate judgment
+results. Therefore, we carefully designed prompts in which we
+outline the specific judgment process. This process implicitly
+creates a rational chain of reasoning, resulting in more logi-
+cally sound decisions [25].
+As shown in Fig. 3, the constructed prompt consists of
+four parts: Task Description, Input Templates, CoT Judgement
+Process, and Output Format. In the Task Description, we
+explicitly outline the tasks that LLM needs to accomplish.
+In addition to determining normal/abnormal, we require that
+it provides reasons for its judgment results. On one hand, by
+having LLM offer reasonable explanations for its judgments,
+we can clarify its analytical process and facilitate further
+debugging. On the other hand, this approach enables us to
+provide users with detailed analysis reports, offering a clearer
+understanding of the system’s operational status.
+We need to apply the same prompt for the detection of
+each log template. To this end, we have designated two
+variable parts: {Input Log Template} and {Topk Known
+Normal Log Templates}, within the Input Templates. These
+parts are intended to represent respectively the log template
+under evaluation and the retrieved similar log template. To de-
+termine the abnormality of an input log template, the three-step
+process is employed in the CoT Judgement Process. Firstly,
+the template is compared with known normal log templates for
+structural and semantic similarities. If the template is identified
+as normal, the classification concludes. If not, the analysis
+proceeds to the next step. In the third step, the input log
+template is independently examined, focusing on keywords
+and key elements such as error codes. It is crucial to note
+that parameters represented by <*> should not be considered
+as indicative of abnormality. The wildcard symbol in the log
+template is used to represent variable parts, and for this task,
+the input specifically consists of these log templates. Finally,
+we enforce strict control over LLM’s output, mandating that
+it produces a response in JSON format. This response should
+include information on whether the log template is deemed
+abnormal and provide the corresponding reasons.
+3) LLM: When providing a specific prompt to LLM, we
+populate the <Input Templates> with concrete log templates.
+The log template under consideration is filled in as {Input
+Log Template}, whereas the retrieved similar log templates
+are filled into {Topk Known Normal Log Templates}.
+In our primary experiments, we utilized OpenAI’s ChatGPT
+as the specific implementation of the LLM. However, with the
+rapid development of open-source LLMs, some of them have
+surpassed ChatGPT in certain capabilities. We are also curious
+about evaluating the performance of open-source LLMs in
+log anomaly detection tasks. Considering the privacy and
+cost concerns associated with real-world application data, the
+utilization of open-source LLMs is a promising alternative.
+Accordingly, we conducted tests using both ChatGPT and an
+open-source LLM.
+Another crucial point is that responses from LLM exhibit
+diversity and occasionally do not strictly adhere to the spec-
+ified format in the prompt [26]. Therefore, it is necessary to
+evaluate the response results. In cases where the format does
+not meet the requirements, we use ChatGPT to further parse
+the unexpected text until it conforms to our processing needs.
+IV. EXPERIMENTS
+In this section, we will evaluate LogRAG by answing the
+following research questions.
+• RQ1: How does LogRAG perform in anomaly detection
+compared with the state-of-the-art methods?
+• RQ2: How RAG contributes to LogRAG in online
+anomaly detection?
+• RQ3: How do different prompt statements affect the
+performance of LogRAG?
+• RQ4: How does each component of LogRAG contribute
+to the final anomaly detection result?
+A. Experimental Setup
+1) Datasets: We conduct our experiments on two widely-
+used open datasets (BGL, Spirit) from LogHub [42]. Each log
+in these two datasets was manually labeled as abnormal and
+normal. BGL dataset is a supercomputing system log dataset
+collected by Lawrence Livermore National Labs (LLNL) [43].
+The BGL dataset contains 4,747,963 logs, 348,460 of which
+are labeled as abnormal (7.34%). Spirit dataset is an aggrega-
+tion of system log data from the Spirit supercomputing system
+at Sandia National Labs [43]. In this experiment, we only
+use the first 5 million log lines of the original dataset, which
+contains 764,500 abnormal log lines (15.29%).
+2) Evaluation Metrics: Our approach does not require
+complex log sequence information during the training process.
+However, some methods (e.g., LogAnomaly [12] and PLELog
+[13]) are based on log sequences for anomaly detection.
+Therefore, for the sake of fairness, we uniformly adopt
+sequence-based standards for evaluation during the testing
+phase. Specifically, we obtain log sequences with a window
+size of 200 logs and 0.5 hours at regular time intervals. If there
+is at least one log entry in the sequence that is anomalous, the
+sequence is considered anomalous; otherwise, it is considered
+normal. It is important to emphasize that some recent works
+shuffle the dataset before subsequent training. However, this
+approach leads to the model seeing log data from the future
+during the training phase (i.e., data leakage), resulting in
+inflated prediction performance [44]. We adhere to real-world
+scenarios and do not shuffle the data; instead, we partition
+the data in chronological order. We select the first 80% of
+each dataset based on their timestamps for training and use
+the remaining 20% for testing.
+We adopt the widely-used Precision, Recall and F1-score for
+all experimental evaluations. P recision = T P T P +F P represents
+173
+Authorized licensed use limited to: IMT - Alti Studi Lucca. Downloaded on October 12,2026 at 02:17:29 UTC from IEEE Xplore.  Restrictions apply. 
+
+=== PAGE 7 ===
+TABLE I: Compare LogRAG with state-of-the-art log-based anomaly detection methods
+Semi/Supervised Method
+BGL Spirit
+window=200 window=0.5h window=200 window=0.5h
+Prec Rec F1 Prec Rec F1 Prec Rec F1 Prec Rec F1
+Semi-Supervised DeepLog 0.192 0.987 0.322 0.984 0.481 0.345 0.175 0.985 0.298 0.291 1 0.45
+Semi-Supervised LogAnomaly 0.203 0.985 0.336 0.276 0.973 0.43 0.198 0.981 0.33 0.33 1 0.496
+Semi-Supervised PLELog 0.862 0.844 0.853 0.76 0.785 0.772 0.141 0.552 0.225 0.516 0.663 0.581
+Supervised LogRobust 0.684 0.963 0.8 0.819 0.946 0.878 0.751 0.965 0.845 0.989 0.989 0.989
+Semi-Supervised LogRAG-Mistral 0.787 0.898 0.898 0.521 0.93 0.668 0.388 0.992 0.558 0.448 0.99 0.616
+Semi-Supervised LogRAG-ChatGPT 0.768 0.832 0.798 0.957 0.828 0.888 0.965 0.745 0.841 1 0.863 0.927
+the proportion of logs detected as anomalous by the model that
+are indeed anomalous. Recall = T P T P +F N represents the pro-
+portion of correctly identified anomalous logs among all logs
+that are actually anomalous. F 1score = 2×P recision×Recall P recision+Recall
+provides a comprehensive evaluation by considering both
+Precision and Recall. TP stands for True Positive, FP for False
+Positive, TN for True Negative, and FN for False Negative.
+3) Baselines: We compare LogRAG with the following
+state-of-the-art log anomaly detection methods.
+• DeepLog [1] is the first work to utilize deep learning
+methods for log anomaly detection. It models normal
+system executions using deep neural networks and can
+continuously update over time.
+• LogAnomaly [12] models log streams as natural lan-
+guage sequences, using a novel method called tem-
+plate2vec to extract semantic information from log tem-
+plates and detect both sequential and quantitative anoma-
+lies.
+• PLELog [13] is a semi-supervised log-based anomaly
+detection approach that incorporates knowledge of his-
+torical anomalies through probabilistic label estimation,
+uses semantic embedding to handle unstable log data,
+and employs an attention-based GRU neural network for
+efficient and effective anomaly detection.
+• LogRobust [14] is a supervised learning method that
+represents log events as semantic vectors. It then employs
+attention-based Bi-LSTM to capture contextual informa-
+tion from log sequences, enabling anomaly detection in
+unstable log events and sequences.
+4) Implementation Details and Environments: In our exper-
+iments, we used the Adam optimizer with an initial learning
+rate of 0.0001, training the model for 150 epochs. The learning
+rate was adjusted at epoch 50 using a milestone schedule.
+A batch size of 40,960 was chosen, and a weight decay of
+0.0005 was applied to regularize the model. We conducted
+all the experiments on the same Linux server with a 64
+Intel(R) Xeon(R) Gold 6226R CPU @ 2.90GHz CPU, 256GB
+RAM, and a GPU with 24GB memory. The operating system
+is Ubuntu 20.04.1. We implemented LogRAG using Python
+3.8.18 and PyTorch 1.10.1. For the post-processing stage
+utilizing the Language Models in RAG, we employed both
+OpenAI’s API interface using ChatGPT-3.5-turbo and the
+Mistral-7B-Instruct model provided by Hugging Face2. For
+other anomaly detection methods, we utilized their publicly
+available implementations [44]. Our code and experiments are
+available on our project homepage3.
+B. RQ1: Compare LogRAG with other Log-Based Anomaly
+Detection Methods
+In this RQ, we explore the effectiveness of LogRAG com-
+pared to other state-of-the-art methods. We show the overall
+effectiveness performance of LogRAG compared to baselines
+in Table I. Among them, LogRobust is a supervised learning
+method, while the others are semi-supervised learning method.
+We evaluated our method at two different window granularities
+(200 and 0.5 hours) to validate its effectiveness across different
+detection accuracies. The highest F1 Score among all methods
+is highlighted in bold, while the highest F1 Score among semi-
+supervised methods is underscored.
+Compared LogRAG to semi-supervised methods. It can
+be observed that LogRAG achieved the best F1 Score on
+the BGL dataset under two different window sizes. Specifi-
+cally, LogRAG-Mistral attained the highest F1 Score with a
+window size of 200, while LogRAG-ChatGPT achieved the
+highest F1 Score with a window size of 0.5 hours. DeepLog
+exhibited very high recall with a window size of 200 but had
+significantly low precision. However, with a window size of
+0.5 hours, its precision increased to 0.984 while its recall
+decreased to 0.481. LogAnomaly demonstrated high recall
+and low precision under both window sizes, indicating that
+it can detect the majority of anomalies but at the cost of
+generating numerous false positives, leading to low precision.
+PLELog aimed to balance recall and precision but struggled
+to improve precision significantly. In contrast, our method
+LogRAG effectively reduced false positives by applying LLM
+in the post-processing stage, thereby enhancing precision.
+Experiments on the Spirit dataset further validated the sig-
+nificant impact of our method on improving precision in
+log anomaly detection. Among semi-supervised methods, all
+achieved very low precision under both window granularities.
+In contrast, LogRAG-ChatGPT attained a precision of 0.965
+with a window size of 200, while the precision of other semi-
+supervised methods was below 0.198. With a window size of
+2https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1
+3https://github.com/WanhaoZhang/LogRAG.git
+174
+Authorized licensed use limited to: IMT - Alti Studi Lucca. Downloaded on October 12,2026 at 02:17:29 UTC from IEEE Xplore.  Restrictions apply. 
+
+=== PAGE 8 ===
+0.5 hours, LogRAG-ChatGPT achieved a precision of 1, while
+the precision of other semi-supervised methods was below
+0.516.
+Compared LogRAG to supervised methods. Although
+LogRobust, a supervised method, has a slightly lower F1
+score than PLELog with a window size of 200 on the BGL
+dataset, it significantly outperforms semi-supervised methods
+like DeepLog, LogAnomaly, and PLELog in other conditions,
+including a 0.5-hour window on the BGL dataset and both
+200-window and 0.5-hour windows on the Spirit dataset. This
+highlights the superior performance of supervised methods in
+log anomaly detection, though they require large amounts of
+manually labeled data, which can be challenging to obtain
+in real-world scenarios. In contrast, our semi-supervised ap-
+proach, LogRAG, exhibits strong performance. On the BGL
+dataset with a 200-window granularity, LogRAG-Mistral sur-
+passes LogRobust, while LogRAG-ChatGPT achieves an F1
+score of 0.798, closely aligning with LogRobust’s 0.8. On
+the Spirit dataset, LogRAG-ChatGPT also closely approaches
+LogRobust’s F1 score, achieving 0.841 under the 200-window
+granularity, slightly below LogRobust’s 0.845. Across all con-
+ditions, LogRAG-ChatGPT demonstrates higher precision than
+LogRobust, highlighting its effectiveness in enhancing preci-
+sion and reducing false alarms in log anomaly detection. Ad-
+ditionally, LogRAG-Mistral, leveraging an open-source LLM,
+performs exceptionally well across various window granulari-
+ties on both datasets, surpassing all semi-supervised methods
+under the 200-window for BGL and both 200-window and
+0.5-hour windows for Spirit.
+This demonstrates that LogRAG is effective with both
+closed-source and open-source LLMs, offering practical ben-
+efits like cost reduction and enhanced privacy. Additionally,
+compared to other methods, LogRAG does not require se-
+quential information, ensuring that its detection time remains
+constant regardless of window granularity. This enables Lo-
+gRAG to efficiently support log anomaly detection across
+varying window sizes. In subsequent experiments, we employ
+LogRAG-ChatGPT uniformly with a 0.5-hour window size.
+C. RQ2: RAG’s contributation to LogRAG in online anomaly
+detection
+1 2 3 4 5
+Log blocks divided in chronological order
+0.0
+0.2
+0.5
+0.8
+1.0Precision
+without RAG
+with RAG
+(a) Precision
+1 2 3 4 5
+Log blocks divided in chronological order
+0.0
+0.2
+0.5
+0.8
+1.0F1 Score
+without RAG
+with RAG (b) F1 Score
+Fig. 4: Precision and F1 Score of LogRAG applying on BGL
+dataset in chronological order with and without RAG
+In this RQ, our aim is to investigate the effect of applying
+RAG on the improvement of precision in LogRAG. We sim-
+ulate real-world scenarios through online anomaly detection
+to validate the enhancement of LogRAG by RAG in actual
+environments. Specifically, we partition the BGL dataset into
+six blocks sequentially labeled from 0 to 5. Then, we train on
+the normal data of the i-th block and test on the i + 1-th block
+(0 ≤ i ≤ 4). Fig.4 illustrates the variations in precision and
+F1 Score of LogRAG on blocks 1 to 5 of the BGL dataset
+under the conditions of using and not using RAG.
+From Fig.4(a), we observe that before applying RAG,
+LogRAG exhibits low precision across all data blocks. After
+applying RAG, LogRAG shows a significant improvement in
+precision across all data blocks. This is because RAG was
+employed to validate the results of anomaly detection obtained
+from the deep one-class classifier. By offering prompts to
+the LLM and presenting similar normal log samples from
+historical logs, the LLM can discern previously encountered
+normal logs from historical data and identify new normal
+logs. Thus, this approach substantially enhances accuracy in
+this phase. Additionally, as seen in Fig.4(b), the improvement
+in precision also influences the F1 Score in the same trend.
+This indicates that our approach primarily enhances the final
+anomaly detection performance by increasing the accuracy
+of anomaly detection. Moreover, in practical applications,
+the enhanced accuracy of anomaly detection substantially
+reduces the cost of manual screening. Additionally, the LLM’s
+assessment process for anomalous logs also provides outputs,
+facilitating operational personnel to make decisions more
+easily based on the LLM’s judgments.
+D. RQ3: The effect of different prompts on LogRAG
+Details of different prompts designs. In this part, we have
+designed five different prompts, the details of each prompt are
+shown below(The omitted part of each prompt is the same as
+those in Fig. 3) :
+# Prompt 1: Ask directly without CoT judgment process
+and similar templates
+Your task is ... Input Log Template: {Input Log Template}
+NOTE: ... Output format: ... Answer:
+# Prompt 2: Given the CoT judgment process, but no
+similar templates
+Your task is ... Input Log Template: {Input Log Template}
+Analyze the Input Log Template independently and
+provide an assessment:
+- You need to ...
+- In the log template, ...
+NOTE: ... Output format: ... Answer:
+# Prompt 3: Given the CoT judgment process and only 1
+known normal templates
+Your task is ... Input Log Template: {Input Log Template}
+175
+Authorized licensed use limited to: IMT - Alti Studi Lucca. Downloaded on October 12,2026 at 02:17:29 UTC from IEEE Xplore.  Restrictions apply. 
+
+=== PAGE 9 ===
+Known Normal Log Template: {Top1 Known Normal
+Log Templates}
+Perform the following steps ...:
+1. Compare the Input Log Template ...
+2. Determine if the input Log Template ...
+- If yes, ... - If no, ...
+3. Analyze the Input Log Template ...
+- You need to ... - In the log template, ...
+NOTE: ... Output format: ... Answer:
+# Prompt 4: Given the CoT judgment process and 5
+known normal templates, Do not ask for a reason for
+LLM response
+Your task is ... Input Log Template: {Input Log Template}
+Known Normal Log Template: {Top5 Known Normal
+Log Templates}
+Perform the following steps ...:
+1. Compare the Input Log Template ...
+2. Determine if the input Log Template ...
+- If yes, ... - If no, ...
+3. Analyze the Input Log Template ...
+- You need to ... - In the log template, ...
+NOTE: Provide a high-confidence binary classifica-
+tion: 0 for normal and 1 for anomaly.
+Output format: ...Answer:
+# Prompt 5: Given the CoT judgment process and 5
+known normal templates, ask for a reason. The prompt
+used in this paper
+Your task is ... Input Log Template: {Input Log Template}
+Known Normal Log Template: {Top5 Known Normal
+Log Templates}
+Perform the following steps ...:
+1. Compare the Input Log Template ...
+2. Determine if the input Log Template ...
+- If yes,... - If no, ...
+3. Analyze the Input Log Template ...
+- You need to ... - In the log template, ...
+NOTE: ... Output format: ... Answer:
+In this RQ, we designed five different prompts to explore the
+effectiveness of LogRAG’s performance under varying degrees
+of prompting. Prompt1 directly requests the LLM to make a
+judgment without providing specific judgment steps or similar
+normal log samples. Prompt2 provides judgment steps but does
+not offer specific normal log samples. Prompt3 provides one
+normal log sample, while Prompt4 provides more normal log
+samples but does not require the LLM to output its judgment
+reasons. Prompt5, the prompt used in this paper, provides five
+similar normal log samples, judgment steps, and requires the
+LLM to provide its judgment reasons.
+We conducted extensive experiments on the BGL and Spirit
+datasets, and the results are shown in Table II. From these
+results, we can derive two important observations. Firstly, pro-
+viding more examples to the LLM can improve its judgment
+accuracy. For instance, the model performance using Prompt5
+TABLE II: Applying different prompts to the LLM in LogRAG
+Prompts
+BGL Spirit
+Prec Rec F1 Prec Rec F1
+Prompt1 0.158 0.968 0.271 0.276 1 0.433
+Prompt2 0.206 0.995 0.341 0.315 1 0.479
+Prompt3 0.214 0.941 0.349 0.52 0.979 0.679
+Prompt4 0.158 0.973 0.272 0.327 1 0.492
+Prompt5 0.957 0.828 0.888 1 0.863 0.927
+(providing five examples) is better than when using Prompt2
+(no examples) and Prompt3 (providing one example). This
+indicates that providing more sample information to the LLM
+allows it to better learn the differences between normal and ab-
+normal logs, thus making more accurate judgments. Secondly,
+in specific tasks such as log anomaly detection, providing
+detailed execution steps to the model and requiring it to output
+judgment reasons often improves the LLM’s performance in
+the specific task. For example, the model performance using
+Prompt5 (with execution steps and requiring output reasons)
+is better than using Prompt1 and Prompt4. This is because
+detailed execution steps and the requirement to output reasons
+help the LLM better understand the task’s objectives and
+requirements, allowing it to focus more on key aspects of the
+task. Additionally, outputting judgment reasons can help users
+better understand the LLM’s judgments, making the entire
+execution process more transparent.
+E. RQ4: Contribution of Main Components in LogRAG
+In this RQ, we will investigate how the main components
+of LogRAG contribute to its effectiveness. In LogRAG, we
+employ Log Tokens and Log Templates as data sources for
+the anomaly detection and post-processing stages, respec-
+tively. Initially, DeepSVDD is utilized for anomaly detection,
+followed by the application of RAG for post-processing to
+further confirm the anomaly results. Consequently, we have
+implemented four variants of LogRAG to individually test
+the main contributions of each part. Specifically, in Table III,
+LogRAG D indicates only using DeepSVDD for anormaly
+detection. LogRAG R only uses RAG for anomaly detection.
+Meanwhile, RAG includes both retrieval and generation stages.
+In order to more finely evaluate the role played by our retrieval
+strategy of RAG, we also tested the effect of using only LLM
+for post-processing in the absence of retrieval enhancement,
+which is LogRAG L. Finally, we use LogRAG T to represent
+the effect of not distinguishing between Log Tokens and Log
+Templates during the log processing stage, and uniformly
+using Log Templates for the entire process. Among them, only
+LogRAG L employs Prompt1 from RQ3, while LogRAG R,
+LogRAG T, and LogRAG all utilize Prompt5.
+As demonstrated in Table III of the ablation experiments,
+LogRAG D exhibits the lowest F1 Score on both datasets.
+While its recall reaches 1 on both the BGL and Spirit datasets,
+its precision stands at only 0.145 and 0.276, respectively.
+This suggests that LogRAG D introduces a significant number
+of false positives when determining the anomaly of logs.
+176
+Authorized licensed use limited to: IMT - Alti Studi Lucca. Downloaded on October 12,2026 at 02:17:29 UTC from IEEE Xplore.  Restrictions apply. 
+
+=== PAGE 10 ===
+TABLE III: Contribution of each component in LogRAG
+Method
+BGL Spirit
+Prec Rec F1 Prec Rec F1
+LogRAG D 0.145 1 0.254 0.276 1 0.433
+LogRAG L 0.158 0.968 0.271 0.276 1 0.433
+LogRAG R 0.671 0.952 0.787 0.436 1 0.607
+LogRAG T 0.465 0.962 0.627 0.72 1 0.837
+LogRAG 0.957 0.828 0.888 1 0.863 0.927
+When only utilizing the LLM, it is observed that LogRAG L
+does not attain high precision on both datasets. However,
+when combined with our retrieval strategy and constructed
+prompt, LogRAG R demonstrates a significant performance
+enhancement. By retrieving similar logs through our method
+and formulating specific prompts, the LLM can better com-
+prehend and deliver more accurate results. Solely relying on
+Log Templates as the detection criterion for the entire process
+will result in a notable performance decrease in LogRAG T.
+Relying merely on templates can substantially affect anomaly
+detection effectiveness because of parsing errors. Nevertheless,
+the effective introduction of Log Tokens in the Anomaly
+Detection Stage in LogRAG helps mitigate the impact of
+parsing errors. LogRAG combines the strengths of DeepSVDD
+and RAG, effectively enhancing precision in log anomaly
+detection through the integration of Log Tokens and Log
+Templates. As a result, LogRAG achieves the highest precision
+and F1 Score on both the BGL and Spirit datasets. This
+experiment further validates the significant effectiveness of our
+proposed method in improving the precision of log anomaly
+detection.
+V. CASE STUDY
+As previously discussed, employing RAG for post-
+processing results from deep one-class classifiers can sig-
+nificantly enhance the precision of log anomaly detection.
+In this section, we specifically explore the errors that RAG
+corrects in the detection process of deep one-class classifiers.
+Based on the comparison of detection results before and after
+applying RAG, the false positive templates corrected by RAG
+are divided into the following three major types as shown in
+Table IV.
+Type 1: The log template matches the templates in the
+training logs. To mitigate the impact of log parsing errors
+on log anomaly detection, we employed Log Tokens instead
+of Log Templates when training the deep one-class classifier,
+thereby reducing the influence of log parsing errors while
+also increasing false positives. For instance, some templates
+corresponding to logs identified as anomalies were already
+present in the training log templates. Therefore, during the
+RAG post-processing stage, retrieving similar templates from
+the vector database enabled the recovery of these previously
+encountered log templates. Moreover, based on the prompts
+we constructed, the LLM can readily determine that these log
+templates are normal. As shown in Table IV, for Type 1, the
+two logs under review retrieved identical log templates from
+the historical logs, which were confirmed as normal. Using
+the prompts, the LLM classified this log template as normal,
+thus reducing the false positives in this category.
+Type 2: The log template is both structurally and
+semantically identical or similar to the templates in the
+training logs. System updates may alter the original logs,
+yielding new logs that are not identical to historical logs;
+however, the structure and semantics of these new logs remain
+consistent with those of the historical logs. For the false
+positives arising in such instances, our specially designed RAG
+module can effectively recognize them. Initially, through the
+retrieval module, it is possible to find logs similar to the current
+log. For instance, as shown in Table IV under Type 2, the
+new log total of <*> ddr error(s) detected and corrected
+over <*> seconds when compared to the retrieved similar log
+total of <*> ddr error(s) detected and corrected merely adds
+temporal information; nonetheless, the structure and semantics
+remain unchanged. Consequently, it can be classified as a
+normal log, thereby preventing the misclassification of this
+type of log as an anomaly.
+Type 3: The log template failed to retrieve any similar
+templates from the training logs and lacks explicit anomaly
+information. Additionally, some logs generated after system
+updates do not match any similar logs in historical data. Based
+on the prompts we constructed, the LLM must independently
+determine whether the log is an anomaly, considering both the
+keywords and the overall semantic information in the template.
+For those templates that lack explicit anomaly keywords or
+where the overall semantics do not indicate an anomaly,
+the RAG module can effectively recognize these as normal.
+For instance, as shown in Table IV under Type 3, the log
+lmgrd shutdown succeeded includes the keyword shutdown,
+potentially suggesting an anomaly; however, its overall se-
+mantics signify the successful completion of an event, thereby
+classifying it as normal. Following RAG post-processing, this
+method effectively prevents the misclassification of such logs
+as anomalies.
+The three types of logs described are continuously gen-
+erated during all system operations and updates. During its
+post-processing stage, LogRAG can effectively identify the
+aforementioned three types of logs misclassified as anoma-
+lies, thereby significantly reducing the false positive rate and
+enhancing the system’s overall usability.
+VI. THREATS TO VALIDITY
+There are several limitations that might affect the effective-
+ness of our method, which are listed below:
+The impact of LLMs’ capabilities on our approach. Due
+to cost constraints and limitations in experimental equipment,
+our method explored the effects of only one proprietary LLM
+and one open-source LLM within our framework. Models
+possessing stronger understanding capabilities, such as GPT-
+4, are likely to yield superior experimental results. Never-
+theless, we validated the effectiveness of our framework by
+conducting experiments under various conditions and crafting
+177
+Authorized licensed use limited to: IMT - Alti Studi Lucca. Downloaded on October 12,2026 at 02:17:29 UTC from IEEE Xplore.  Restrictions apply. 
+
+=== PAGE 11 ===
+TABLE IV: The three types of anomaly detection errors corrected by LogRAG
+False
+Positive
+Types
+Abormal Templates
+Detected by DeepOC Retrieval Results LLM Judgement Reasons Result
+Type 1
+ciod: LOGIN <*>failed:
+<*><*> [’ciod: LOGIN <*>failed: <*><*>’, ...] The input log template is normal. It matches one of the known normal log templates. Normal
+floating point <*><*> [’floating point <*><*>’, ...] The input log template is normal. It matches one of the known normal log templates. Normal
+Type 2
+enable inexact
+exceptions................0
+[’byte ordering exception.....................0’,
+...]
+The input log template is normal. It is
+structurally and semantically identical or very
+similar to the known normal log templates
+Normal
+total of <*>ddr error(s)
+detected and corrected
+over <*>seconds
+[’total of <*>ddr error(s) detected and
+corrected’, ...]
+The input log template is normal. It matches
+one of the known normal log templates and is
+structurally and semantically identical.
+Normal
+Type 3
+lmgrd shutdown
+succeeded None
+The input log template does not contain any
+error codes or unusual terms, indicating a
+normal log.
+Normal
+dhcpd: DHCPREQUEST
+for <*>(<*>) from
+<*>via eth0
+None
+Normal log template. The log is a standard
+DHCPREQUEST message for requesting an IP
+address via eth0. No indication of any errors or
+anomalies.
+Normal
+diverse prompts. When more powerful LLMs are employed,
+our approach is anticipated to achieve even more impressive
+outcomes, which we aim to explore in our future work.
+The gap between research and practical application. This
+paper conducted extensive experiments on two widely used
+public datasets and achieved commendable results. However,
+when applying this method to real-world scenarios, the sta-
+bility of the approach requires further evaluation. Owing to
+ongoing changes in systems, periodic retraining of the deep
+one-class classifier model is necessary. However, the RAG
+post-processing module we designed can automatically adapt
+to system changes, significantly reducing the frequency of
+retraining required.
+VII. CONCLUSION AND FUTURE WORK
+This paper presents LogRAG, a semi-supervised framework
+for log anomaly detection. It incorporates a deep single-class
+classifier for anomaly detection and employs RAG for post-
+processing. In contrast to other semi-supervised log detection
+methods, LogRAG alleviates the effects of log parsing errors
+and unstable log sequences resulting from system evolution.
+Moreover, through the utilization of RAG, LogRAG dimin-
+ishes false positives in the final outcomes. The experimental re-
+sults suggest that LogRAG surpasses all other semi-supervised
+anomaly detection methods in terms of F1 Score, approaching
+the performance of supervised methods.
+For future research, we plan to evaluate the performance of
+various LLMs within the LogRAG framework and develop
+more effective retrieval strategies and prompts to further
+enhance the framework’s effectiveness. We also aim to in-
+tegrate LogRAG with other advanced log anomaly detection
+methods to enhance their overall effectiveness. Additionally,
+we will explore more effective approaches for log anomaly
+detection using LLMs, including the development of improved
+model architectures and feature selection strategies tailored to
+different detection scenarios.
+ACKNOWLEDGMENT
+We are grateful to the anonymous reviewers for their help-
+ful feedback and suggestions for enhancing this paper. This
+work is partially supported by Ascend Servers provided by
+Advanced Computing and Storage Lab, Huawei.
+REFERENCES
+[1] Min Du, Feifei Li, Guineng Zheng, and Vivek Srikumar. Deeplog:
+Anomaly detection and diagnosis from system logs through deep learn-
+ing. In Proceedings of the 2017 ACM SIGSAC conference on computer
+and communications security, pages 1285–1298, 2017.
+[2] Qiang Fu, Jian-Guang Lou, Yi Wang, and Jiang Li. Execution anomaly
+detection in distributed systems through unstructured log analysis. In
+2009 ninth IEEE international conference on data mining, pages 149–
+158. IEEE, 2009.
+[3] Adam J Oliner, Alex Aiken, and Jon Stearley. Alert detection in system
+logs. In 2008 Eighth IEEE International Conference on Data Mining,
+pages 959–964. IEEE, 2008.
+[4] Qingwei Lin, Hongyu Zhang, Jian-Guang Lou, Yu Zhang, and Xuewei
+Chen. Log clustering based problem identification for online service
+systems. In Proceedings of the 38th International Conference on
+Software Engineering Companion, pages 102–111, 2016.
+[5] Enyu Yu, Hui Dong, Yuxiang Ren, Minzhi Yan, Xuecang Zhang,
+Yi Yang, Le Yue, and Zhengbin Huang. Hrca: A heterogeneous graph-
+based adaptive root cause analysis framework. In 2023 IEEE 34th
+International Symposium on Software Reliability Engineering Workshops
+(ISSREW), pages 63–68. IEEE, 2023.
+[6] Yeqing Meng, Qianli Zhang, Xiangyu Tang, Wanhao Zhang, and Jilong
+Wang. Ftm-rca: A fast two-stage multi-dimensional root-cause analysis
+of network anomalies. In 2023 IEEE/ACM 31st International Symposium
+on Quality of Service (IWQoS), pages 01–10. IEEE, 2023.
+[7] Shenglin Zhang, Weibin Meng, Jiahao Bu, Sen Yang, Ying Liu, Dan
+Pei, Jun Xu, Yu Chen, Hui Dong, Xianping Qu, et al. Syslog processing
+for switch failure diagnosis and prediction in datacenter networks. In
+2017 IEEE/ACM 25th International Symposium on Quality of Service
+(IWQoS), pages 1–10. IEEE, 2017.
+[8] Tao Li, Yexi Jiang, Chunqiu Zeng, Bin Xia, Zheng Liu, Wubai Zhou,
+Xiaolong Zhu, Wentao Wang, Liang Zhang, Jun Wu, et al. Flap: An
+end-to-end event log analysis platform for system management. In
+Proceedings of the 23rd ACM SIGKDD International Conference on
+Knowledge Discovery and Data Mining, pages 1547–1556, 2017.
+178
+Authorized licensed use limited to: IMT - Alti Studi Lucca. Downloaded on October 12,2026 at 02:17:29 UTC from IEEE Xplore.  Restrictions apply. 
+
+=== PAGE 12 ===
+[9] Max Landauer, Sebastian Onder, Florian Skopik, and Markus Wurzen-
+berger. Deep learning for anomaly detection in log data: A survey.
+Machine Learning with Applications, 12:100470, 2023.
+[10] Weibin Meng, Ying Liu, Shenglin Zhang, Federico Zaiter, Yuzhe Zhang,
+Yuheng Huang, Zhaoyang Yu, Yuzhi Zhang, Lei Song, Ming Zhang,
+et al. Logclass: Anomalous log identification and classification with
+partial labels. IEEE Transactions on Network and Service Management,
+18(2):1870–1884, 2021.
+[11] Tianzhu Zhang, Han Qiu, Gabriele Castellano, Myriana Rifai,
+Chung Shue Chen, and Fabio Pianese. System log parsing: A survey.
+IEEE Transactions on Knowledge and Data Engineering, 2023.
+[12] Weibin Meng, Ying Liu, Yichen Zhu, Shenglin Zhang, Dan Pei, Yuqing
+Liu, Yihao Chen, Ruizhi Zhang, Shimin Tao, Pei Sun, et al. Loganomaly:
+Unsupervised detection of sequential and quantitative anomalies in
+unstructured logs. In IJCAI, volume 19, pages 4739–4745, 2019.
+[13] Lin Yang, Junjie Chen, Zan Wang, Weijing Wang, Jiajun Jiang, Xuyuan
+Dong, and Wenbin Zhang. Semi-supervised log-based anomaly detection
+via probabilistic label estimation. In 2021 IEEE/ACM 43rd International
+Conference on Software Engineering (ICSE), pages 1448–1460. IEEE,
+2021.
+[14] Xu Zhang, Yong Xu, Qingwei Lin, Bo Qiao, Hongyu Zhang, Yingnong
+Dang, Chunyu Xie, Xinsheng Yang, Qian Cheng, Ze Li, et al. Robust
+log-based anomaly detection on unstable log data. In Proceedings of
+the 2019 27th ACM joint meeting on European software engineering
+conference and symposium on the foundations of software engineering,
+pages 807–817, 2019.
+[15] Van-Hoang Le and Hongyu Zhang. Log-based anomaly detection
+without log parsing. In 2021 36th IEEE/ACM International Conference
+on Automated Software Engineering (ASE), pages 492–504. IEEE, 2021.
+[16] Yintong Huo, Cheryl Lee, Yuxin Su, Shiwen Shan, Jinyang Liu, and
+Michael R Lyu. Evlog: Identifying anomalous logs over software
+evolution. In 2023 IEEE 34th International Symposium on Software
+Reliability Engineering (ISSRE), pages 391–402. IEEE, 2023.
+[17] Xuheng Wang, Jiaxing Song, Xu Zhang, Junshu Tang, Weihe Gao,
+and Qingwei Lin. Logonline: A semi-supervised log-based anomaly
+detector aided with online learning mechanism. In 2023 38th IEEE/ACM
+International Conference on Automated Software Engineering (ASE),
+pages 141–152. IEEE, 2023.
+[18] Xiaoyun Li, Pengfei Chen, Linxiao Jing, Zilong He, and Guangba Yu.
+Swisslog: Robust and unified deep learning based log anomaly detection
+for diverse faults. In 2020 IEEE 31st International Symposium on
+Software Reliability Engineering (ISSRE), pages 92–103. IEEE, 2020.
+[19] Siyang Lu, Xiang Wei, Yandong Li, and Liqiang Wang. Detecting
+anomaly in big data system logs using convolutional neural network.
+In 2018 IEEE 16th Intl Conf on Dependable, Autonomic and Secure
+Computing, 16th Intl Conf on Pervasive Intelligence and Computing,
+4th Intl Conf on Big Data Intelligence and Computing and Cyber Sci-
+ence and Technology Congress (DASC/PiCom/DataCom/CyberSciTech),
+pages 151–158. IEEE, 2018.
+[20] Rahul Dey and Fathi M Salem. Gate-variants of gated recurrent
+unit (gru) neural networks. In 2017 IEEE 60th international midwest
+symposium on circuits and systems (MWSCAS), pages 1597–1600. IEEE,
+2017.
+[21] Sasho Nedelkoski, Jasmin Bogatinovski, Alexander Acker, Jorge Car-
+doso, and Odej Kao. Self-attentive classification-based anomaly detec-
+tion in unstructured logs. In 2020 IEEE International Conference on
+Data Mining (ICDM), pages 1196–1201. IEEE, 2020.
+[22] Junjielong Xu, Ruichun Yang, Yintong Huo, Chengyu Zhang, and Pinjia
+He. Prompting for automatic log template extraction. arXiv preprint
+arXiv:2307.09950, 2023.
+[23] Zeyang Ma, An Ran Chen, Dong Jae Kim, Tse-Hsun Peter Chen,
+and Shaowei Wang. Llmparser: An exploratory study on using large
+language models for log parsing. 2024.
+[24] Junjielong Xu, Ruichun Yang, Yintong Huo, Chengyu Zhang, and Pinjia
+He. Divlog: Log parsing with prompt enhanced in-context learning.
+In Proceedings of the IEEE/ACM 46th International Conference on
+Software Engineering, pages 1–12, 2024.
+[25] Yilun Liu, Shimin Tao, Weibin Meng, Jingyu Wang, Wenbing Ma,
+Yanqing Zhao, Yuhang Chen, Hao Yang, Yanfei Jiang, and Xun Chen.
+Logprompt: Prompt engineering towards zero-shot and interpretable log
+analysis. arXiv preprint arXiv:2308.07610, 2023.
+[26] Jiaxing Qi, Shaohan Huang, Zhongzhi Luan, Carol Fung, Hailong Yang,
+and Depei Qian. Loggpt: Exploring chatgpt for log-based anomaly
+detection. arXiv preprint arXiv:2309.01189, 2023.
+[27] Jinyang Liu, Junjie Huang, Yintong Huo, Zhihan Jiang, Jiazhen Gu,
+Zhuangbin Chen, Cong Feng, Minzhi Yan, and Michael R Lyu. Scalable
+and adaptive log-based anomaly detection with expert in the loop. arXiv
+preprint arXiv:2306.05032, 2023.
+[28] Shengyin Sun, Yuxiang Ren, Chen Ma, and Xuecang Zhang. Large
+language models as topological structure enhancers for text-attributed
+graphs. arXiv preprint arXiv:2311.14324, 2023.
+[29] Jianxiang Yu, Yuxiang Ren, Chenghua Gong, Jiaqi Tan, Xiang Li, and
+Xuecang Zhang. Empower text-attributed graphs learning with large
+language models (llms). arXiv preprint arXiv:2310.09872, 2023.
+[30] Xinyu Lin, Wenjie Wang, Yongqi Li, Shuo Yang, Fuli Feng, Yinwei
+Wei, and Tat-Seng Chua. Data-efficient fine-tuning for llm-based
+recommendation. In Proceedings of the 47th International ACM SIGIR
+Conference on Research and Development in Information Retrieval,
+SIGIR ’24, page 365–374, New York, NY, USA, 2024. Association for
+Computing Machinery.
+[31] Tianyu Zhang, Yuxiang Ren, Chengbin Hou, Hairong Lv, and Xue-
+gong Zhang. Molecular graph representation learning integrating large
+language models with domain-specific small models. arXiv preprint
+arXiv:2408.10124, 2024.
+[32] Yinfang Chen, Huaibing Xie, Minghua Ma, Yu Kang, Xin Gao, Liu
+Shi, Yunjie Cao, Xuedong Gao, Hao Fan, Ming Wen, et al. Empow-
+ering practical root cause analysis by large language models for cloud
+incidents. arXiv preprint arXiv:2305.15778, 2023.
+[33] Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir
+Karpukhin, Naman Goyal, Heinrich K¨uttler, Mike Lewis, Wen-tau Yih,
+Tim Rockt¨aschel, et al. Retrieval-augmented generation for knowledge-
+intensive nlp tasks. Advances in Neural Information Processing Systems,
+33:9459–9474, 2020.
+[34] Pinjia He, Jieming Zhu, Shilin He, Jian Li, and Michael R Lyu.
+Towards automated log parsing for large-scale log data analysis. IEEE
+Transactions on Dependable and Secure Computing, 15(6):931–944,
+2017.
+[35] Pinjia He, Jieming Zhu, Zibin Zheng, and Michael R Lyu. Drain:
+An online log parsing approach with fixed depth tree. In 2017 IEEE
+international conference on web services (ICWS), pages 33–40. IEEE,
+2017.
+[36] Bogdan Dit, Latifa Guerrouj, Denys Poshyvanyk, and Giuliano Antoniol.
+Can better identifier splitting techniques help feature location? In 2011
+IEEE 19th International Conference on Program Comprehension, pages
+11–20. IEEE, 2011.
+[37] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova.
+Bert: Pre-training of deep bidirectional transformers for language un-
+derstanding. arXiv preprint arXiv:1810.04805, 2018.
+[38] Hailun Ding, Juan Zhai, Yuhong Nan, and Shiqing Ma. {AIRTAG}:
+Towards automated attack investigation by unsupervised learning with
+log texts. In 32nd USENIX Security Symposium (USENIX Security 23),
+pages 373–390, 2023.
+[39] Shimin Tao, Yilun Liu, Weibin Meng, Zuomin Ren, Hao Yang, Xun
+Chen, Liang Zhang, Yuming Xie, Chang Su, Xiaosong Oiao, et al.
+Biglog: Unsupervised large-scale pre-training for a unified log repre-
+sentation. In 2023 IEEE/ACM 31st International Symposium on Quality
+of Service (IWQoS), pages 1–11. IEEE, 2023.
+[40] Lukas Ruff, Robert Vandermeulen, Nico Goernitz, Lucas Deecke,
+Shoaib Ahmed Siddiqui, Alexander Binder, Emmanuel M¨uller, and
+Marius Kloft. Deep one-class classification. In International conference
+on machine learning, pages 4393–4402. PMLR, 2018.
+[41] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia,
+Ed Chi, Quoc V Le, Denny Zhou, et al. Chain-of-thought prompting
+elicits reasoning in large language models. Advances in neural infor-
+mation processing systems, 35:24824–24837, 2022.
+[42] Shilin He, Jieming Zhu, Pinjia He, and Michael R Lyu. Loghub: A
+large collection of system log datasets towards automated log analytics.
+arXiv preprint arXiv:2008.06448, 2020.
+[43] Adam Oliner and Jon Stearley. What supercomputers say: A study of
+five system logs. In 37th annual IEEE/IFIP international conference
+on dependable systems and networks (DSN’07), pages 575–584. IEEE,
+2007.
+[44] Van-Hoang Le and Hongyu Zhang. Log-based anomaly detection with
+deep learning: How far are we? In Proceedings of the 44th international
+conference on software engineering, pages 1356–1367, 2022.
+179
+Authorized licensed use limited to: IMT - Alti Studi Lucca. Downloaded on October 12,2026 at 02:17:29 UTC from IEEE Xplore.  Restrictions apply. 

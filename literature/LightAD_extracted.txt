@@ -1,0 +1,1555 @@
+=== PAGE 1 ===
+Deep Learning or Classical Machine Learning? An Empirical
+Study on Log-Based Anomaly Detection
+Boxi Yu
+boxiyu@link.cuhk.edu.cn
+School of Data Science, The Chinese
+University of Hong Kong, Shenzhen
+(CUHK-Shenzhen), China
+Jiayi Yao
+jiayiyao@link.cuhk.edu.cn
+School of Data Science, The Chinese
+University of Hong Kong, Shenzhen
+(CUHK-Shenzhen), China
+Qiuai Fu
+fuqiuai@huawei.com
+Huawei Cloud Computing
+Technologies CO., LTD.
+China
+Zhiqing Zhong
+cheehingchung@gmail.com
+School of Data Science, The Chinese
+University of Hong Kong, Shenzhen
+(CUHK-Shenzhen), China
+Haotian Xie
+haotianxie@link.cuhk.edu.cn
+School of Data Science, The Chinese
+University of Hong Kong, Shenzhen
+(CUHK-Shenzhen), China
+Yaoliang Wu
+wuyaoliang1@huawei.com
+Huawei Cloud Computing
+Technologies CO., LTD.
+China
+Yuchi Ma
+mayuchi1@huawei.com
+Huawei Cloud Computing
+Technologies CO., LTD.
+China
+Pinjia He∗
+hepinjia@cuhk.edu.cn
+School of Data Science, The Chinese
+University of Hong Kong, Shenzhen
+(CUHK-Shenzhen), China
+ABSTRACT
+While deep learning (DL) has emerged as a powerful technique, its
+bene!ts must be carefully considered in relation to computational
+costs. Speci!cally, although DL methods have achieved strong per-
+formance in log anomaly detection, they often require extended
+time for log preprocessing, model training, and model inference,
+hindering their adoption in online distributed cloud systems that
+require rapid deployment of log anomaly detection service.
+This paper investigates the superiority of DL methods compared
+to simpler techniques in log anomaly detection. We evaluate basic
+algorithms (e.g., KNN, SLFN) and DL approaches (e.g., CNN) on!ve
+public log anomaly detection datasets (e.g., HDFS). Our!ndings
+demonstrate that simple algorithms outperform DL methods in
+both time e"ciency and accuracy. For instance, on the Thunderbird
+dataset, the K-nearest neighbor algorithm trains 1,000 times faster
+than NeuralLog while achieving a higher F1-Score by 0.0625. We
+also identify three factors contributing to this phenomenon, which
+are: (1) redundant log preprocessing strategies, (2) dataset simplicity,
+and (3) the nature of binary classi!cation in log anomaly detection.
+To assess the necessity of DL, we propose LightAD, an architec-
+ture that optimizes training time, inference time, and performance
+score. With automated hyper-parameter tuning, LightAD allows
+∗Pinjia He is the corresponding author.
+Permission to make digital or hard copies of all or part of this work for personal or
+classroom use is granted without fee provided that copies are not made or distributed
+for pro!t or commercial advantage and that copies bear this notice and the full citation
+on the!rst page. Copyrights for components of this work owned by others than the
+author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or
+republish, to post on servers or to redistribute to lists, requires prior speci!c permission
+and/or a fee. Request permissions from permissions@acm.org.
+ICSE ’24, April 14–20, 2024, Lisbon, Portugal
+©2024 Copyright held by the owner/author(s). Publication rights licensed to ACM.
+ACM ISBN 979-8-4007-0217-4/24/04. . . $15.00
+https://doi.org/10.1145/3597503.3623308
+fair comparisons among log anomaly detection models, enabling
+engineers to evaluate the suitability of complex DL methods.
+Our!ndings serve as a cautionary tale for the log anomaly detec-
+tion community, highlighting the need to critically analyze datasets
+and research tasks before adopting DL approaches. Researchers
+proposing computationally expensive models should benchmark
+their work against lightweight algorithms to ensure a comprehen-
+sive evaluation.
+KEYWORDS
+Log analysis, anomaly detection, dataset, empirical study
+ACM Reference Format:
+Boxi Yu, Jiayi Yao, Qiuai Fu, Zhiqing Zhong, Haotian Xie, Yaoliang Wu, Yuchi
+Ma, and Pinjia He. 2024. Deep Learning or Classical Machine Learning?
+An Empirical Study on Log-Based Anomaly Detection. In2024 IEEE/ACM
+46th International Conference on Software Engineering (ICSE ’24), April 14–20,
+2024, Lisbon, Portugal.ACM, New York, NY, USA, 13 pages. https://doi.org/
+10.1145/3597503.3623308
+1 INTRODUCTION
+Over the past decade, many online large-scale software systems
+have been developed to enhance our daily lives, including search
+engines, social media platforms, and machine translation systems.
+These online software systems must be available on a 24/7 basis,
+as any downtime may result in user dissatisfaction and signi!cant
+revenue loss, especially for large-scale distributed systems designed
+to serve millions of users. In fact, according to “Downtime, Outages
+and Failures - Understanding Their True Costs” [22], a critical ap-
+plication failure can result in loss of application service and data,
+costing companies up to $300,000 per hour in web application down-
+time or $5,600 per minute. Well-known companies have su#ered
+signi!cant revenue losses due to large-scale web service downtime.
+
+=== PAGE 2 ===
+ICSE ’24, April 14–20, 2024, Lisbon, Portugal Boxi Yu, Jiayi Yao, Qiuai Fu, Zhiqing Zhong, Haotian Xie, Yaoliang Wu, Yuchi Ma, and Pinjia He
+For example, Amazon reported a loss of $2,646,501 in revenue dur-
+ing a 13-minute downtime episode [74], while Facebook su#ered
+a loss of approximately $426,607 in revenue during a 19-minute
+site-wide outage [73].
+System logs are crucial in the development and maintenance
+of modern software, and are widely used to detect anomalies in
+cloud systems. However, as the volume of logs continues to grow,
+classical log analysis approaches that rely on manual inspection
+have become ine"cient and time-consuming. For example, some
+modern cloud systems can produce 50 gigabytes (around 200 mil-
+lion lines) of logs per hour [60]. To address this challenge, many
+automatic log analysis methods have been proposed, including clas-
+sical machine learning (ML)-based methods [9,10,15,47–49,51,80]
+and DL methods [21,24,52,56,62,85]. Some DL methods claim to
+outperform classical methods on datasets such as BGL and Thun-
+derbird [63]. Log data needs to be transformed into vectors before it
+can be fed into a model. To this end, various log vectorization meth-
+ods have been proposed, including static code analysis [80], log
+parsers [31,75], and neural representations [42] using BERT [19].
+However, it is unclear whether these methods are necessary, as no
+analysis has compared them with a simple baseline method that
+eliminates variables in the log and tokenizes the log into a set of
+word tokens.
+Despite the satisfactory performance of SOTA DL methods, the
+data preprocessing, training, and inference processes often consume
+a signi!cant amount of time and require high-demand hardware.
+Taking inspiration from Fu and Menzies’ suggestion [29] that “it is a
+good practice to explore simple and fast techniques before applying
+DL methods on SE tasks”, we aim to investigate whether simple
+methods can achieve comparable performance to DL methods in
+log anomaly detection. This leads to our!rst research question:
+RQ1: Do DL methods have advantages over simple ones on
+log anomaly detection?
+To answer the research question of whether DL methods have ad-
+vantages over simple ones on log anomaly detection tasks, we con-
+ducted experiments on!ve popular log anomaly detection datasets:
+HDFS [80], BGL, Spirit, ThunderBird, and Liberty [63]. Some DL
+methods have claimed to achieve excellent performance on these
+datasets. However, our study found that simple methods can achieve
+the best performance on each of the!ve log datasets in terms of
+evaluation metrics and time e"ciency. We try to explain why sim-
+ple log vectorization methods and simple ML-Based models can
+easily beat the intricate DL models. Therefore, we ask our second
+research question:
+RQ2: Why do DL methods not outperform simple ones?
+Our investigation has uncovered three fundamental reasons why
+basic log vectorization techniques and simple machine learning-
+based models can surpass complex DL models with ease. First,
+the redundancy of log preprocessing strategies employed by some
+approaches, such as grouping multiple lines of log messages to
+generate a session window, hampers the e#ectiveness of DL models.
+Our analysis of supercomputer log datasets such as BGL, Thun-
+derbird, and Spirit [63] indicates that these datasets are labeled
+in a line-by-line manner, making redundant preprocessing unnec-
+essary. Second, the simplicity of log datasets can lead to varying
+degrees of data leakage caused by recurring log patterns among the
+datasets, which aligns with the!nding in [43]. Our!ndings reveal
+that direct log sequence/message matching can achieve compara-
+ble or even better results than SOTA deep methods on HDFS and
+Spirit. Additionally, after eliminating the recurring log sequences
+in HDFS, simple log anomaly detection methods can still achieve
+relatively high𝐿1-Score (0.9406-0.9410) compared to deep methods
+(0.8017-0.9244). Third, the innate nature of binary classi!cation
+in log anomaly detection may also contribute to the superiority
+of simple binary classi!cation methods over DL models speci!-
+cally engineered for log anomaly detection. To further explore the
+underlying reasons for this phenomenon, we provide a detailed
+examination of binary classi!cation in log anomaly detection and
+highlight the advantages of utilizing simple binary classi!cation
+techniques. Our research!ndings underscore the importance of
+leveraging simple and e#ective approaches for log anomaly detec-
+tion.
+In our analysis of both RQ1 and RQ2, we observed that intricate
+DL methods failed to surpass their simpler counterparts across all
+!ve public log datasets. This raises a critical question about the
+necessity of employing costly DL methods in log anomaly detection,
+thereby giving our third research question:
+RQ3:When should we use DL methods?
+We carefully examined recent research papers on DL anom-
+aly detection methods [42,52] and discovered that their claims
+of the superiority of DL methods may not always be valid due to
+three factors: (1) weak baseline comparison, (2) potential ine#ective
+hyper-parameter tuning, and (3) neglect of time e"ciency. In this
+paper, we propose an approach named LightAD that optimizes both
+performance and time e"ciency. With automated hyper-parameter
+tuning using Bayesian optimization, LightAD provides a fair com-
+parison of various log anomaly detection methods.
+On the deduplicated HDFS, LightAD consistently recommends
+the use of simple methods, regardless of the prioritized objective,
+such as𝐿1-Score or inference time. Our experimental results cau-
+tion the log anomaly detection community to carefully evaluate
+new innovations before applying them, especially for cloud web
+applications serving millions of users. Before deploying new and
+expensive processes, it is important to compare them with simpler
+and faster alternatives. Moving forward, we are interested in testing
+LightAD on additional datasets to determine whether complex log
+grouping or DL methods are necessary for log anomaly detection.
+We believe LightAD can serve as a strong baseline for future log
+studies.
+There are four main contributions of this work:
+•We show that complex DL methods and the related log pre-
+processing techniques do not necessarily have advantages
+over simple methods in both accuracy performance and time
+e"ciency on the current log anomaly detection benchmarks.
+•We summarize three reasons why DL methods do not outper-
+form simple methods: (1) redundant log data preprocessing
+strategies, (2) simplicity of current log benchmarks, and (3)
+the innate nature of binary classi!cation in log anomaly
+detection.
+•We propose LightAD, a framework that automatically tunes
+the hyper-parameters to optimize objectives leveraging both
+accuracy and e"ciency, and show its practical ability to
+verify the necessity of DL methods.
+
+=== PAGE 3 ===
+Deep Learning or Classical Machine Learning? An Empirical Study on Log-Based Anomaly Detection ICSE ’24, April 14–20, 2024, Lisbon, Portugal
+•We give a cautionary tale that critical analysis should be
+conducted on the tasks before applying costly AI models.
+2 BACKGROUND
+2.1 Log-based Anomaly Detection Work!ow
+The overall framework of log anomaly detection is presented in
+Fig. 1, which includes two mainstream methods: methods utilizing
+log parsing and methods without parsing. Log anomaly detection
+methods with log parsing comprise four steps: log collection, log
+parsing, log grouping, and feature extraction. On the other hand,
+log anomaly detection methods without log parsing consist of three
+steps: log collection, preprocessing, and neural representation be-
+fore anomaly detection. In this section, we will introduce the com-
+ponents of these two mainstream methods.
+Log Collection.Logs serve as historical records of runtime in-
+formation in software systems. In modern large-scale distributed
+systems, logs play a crucial role in diagnosing systems, but the
+overwhelming volume of logs can be daunting. Thus, log collection
+is the!rst step of automatic log anomaly detection systems.
+Log Parsing.Raw log data are semi-structured and need log pars-
+ing tools to be parsed into structured data that enable downstream
+log analysis tasks, including usage analysis, anomaly detection,
+duplicate issue identi!cation, performance modeling, and failure
+diagnosis [89]. Some works [61,80] use static analysis techniques
+to extract event templates from the source code. For closed-source
+software, several data-driven methods have been adopted to parse
+logs, such as SLCT [75], LogCluster [76], IPLoM [53], LKE [28],
+Spell [20], and Drain [31].
+Log Vectorization.As log data are natural language sentences,
+they need to be processed into vectors before being fed into the
+models. There are two categories of log vectorization, one is log
+vectorization with log parsing, and the other is without log parsing.
+For vectorization with log parsing, log grouping is the!rst step.
+There are three log grouping methods, including!xed-window,
+sliding-window [43], and session window [42,80]. Session win-
+dows, which are frequently adopted by classical ML-based methods,
+are based on identi!ers. For instance, HDFS [80] employs aggre-
+gate log by “blk_id” to generate session window which counts the
+events. For DL log anomaly detection methods, they will convert
+the logs into three main types of vectors [43], which are sequential
+vectors, quantitative vectors, and semantic vectors. For example,
+DeepLog [21] assigns each log event with an index, and then gener-
+ates sequential vectors with a certain window size. The sequential
+vectors record the execution path of the log event. The quantitative
+vectors are similar to the log count vectors, which record the occur-
+rence of each log event in a log window. The semantic vectors use
+a language model to represent the semantic meaning of log events
+and convert the log windows into semantic vectors.
+Inspired by the bag-of-words model,Term Frequency / Inverse
+Document Frequency(TF-IDF), a well-established heuristic in infor-
+mation retrieval [64,69], is always employed as a term weighting
+method to calculate the importance of words in log events. For log
+vectorization without log parsing, NeurlLog [42] is proposed to
+encode log by using BERT [19] to generate semantic vectors and
+feed the vectors into a Transformer-based classi!er [77].
+2.2 Representative Approaches
+To choose the representative approaches, we reviewed a series of ex-
+perience reports [16,33], empirical study [43], surveys [32,39], and
+the SOTA methods [21,42,52,85] on log anomaly detection. Vari-
+ous methods are being utilized for log anomaly detection, consisting
+of simple ML-Based models and heavily weighted DL models. We
+consider the performance of these models on several log anomaly
+detection benchmarks and choose three top-notch DL models with
+the best𝐿1𝑀𝑁𝑂𝑃𝑄, i.e., CNN [52], NeuralLog [42], LogRobust [85]
+and compare them with some commonly used simple models. For
+simple models, we adopt K-nearest neighbor (KNN), single hidden
+layer feed-forward neural network (SLFN), and decision tree (DT)
+for log anomaly detection.
+2.2.1 Classical ML-based Methods.K-nearest neighbor (KNN)
+[27] is one of the most fundamental and simple classi!cation meth-
+ods. In our implementation, the training phase of KNN is to store
+the feature vectors and class labels of the log data. For the inference
+phase, the prediction of a log vector is assigned the label which
+aligns the majority of the labels among the nearest k training sam-
+ples to that query point.
+SLFN.A multilayer perceptron (MLP) is a class of fully connected
+feedforward neural network, which utilizes back-propagation for
+training. Single hidden layer feed-forward neural network (SLFN)
+is the most naive MLP, which only contains a single hidden layer.
+Decision Tree.Decision tree (DT) is like a decision support tool
+that uses a tree structure with several branches to illustrate the
+predicted state for each instance. Decision tree was!rst adopted to
+diagnose failures in large internet sites by Chen et al. [15].
+2.2.2 Deep Learning Methods.CNN.Lu et al. [52] propose an
+approach for log anomaly detection by leveraging Convolutional
+Neural Networks (CNN). The CNN-based model can learn event
+relationships automatically and achieve high accuracy. The deep
+CNN-based model consists oflogkey2vecembeddings, three 1D
+convolutional layers, dropout layer and max-pooling.
+LogRobust.To tackle the challenge that log data often contain
+unseen instances due to the update of log statements, Zhang et
+al. [85] propose LogRobust to extract the semantic information of
+the log data. Furthermore, LogRobust incorporates the attention
+mechanism [5] into the Bi-LSTM model to assign di#erent weights
+to log events.
+NeuralLog.As the!rst approach without log parsing, Neural-
+Log [42] preprocesses the log messages into a set of words. Then it
+uses WordPiece tokenization [70,79] to handle the OOV words, and
+uses a pre-trained BERT [19] to obtain the semantic meaning of log
+messages. To better understand the semantics of logs, NeuralLog
+adopts the transformer [77] model rather than RNN-based models.
+Two main factors contribute to SVM, DT, and SLFN being consid-
+ered simpler than CNN [52], LogRobust [85] (based on LSTM), and
+NeuralLog [42] (based on BERT).(1) Architecture complexity:
+KNN, DT and SLFN have relatively simple architectures compared
+to CNNs, LSTMs, and BERT. KNN only involves a distance metric
+and the selection of k nearest neighbors to make a prediction. DT
+uses a decision tree structure to recursively partition the input
+feature space into smaller regions. SLFN only contains one hidden
+
+=== PAGE 4 ===
+ICSE ’24, April 14–20, 2024, Lisbon, Portugal Boxi Yu, Jiayi Yao, Qiuai Fu, Zhiqing Zhong, Haotian Xie, Yaoliang Wu, Yuchi Ma, and Pinjia He
+Normal
+Event count Vectors
+Sequential vectors
+Session windows
+Fixed windows
+Sliding windows
+Log Collection
+Log messages
+i. 081109 203518 143 INFO dfs.DataNode$DataXceiver: 
+Receiving block blk_1608999687919862906 src: 
+/10.250.19.102:54106 dest: /10.250.19.102:50010
+Log events
+i. Receiving block <*> src: <*> dest: <*>
+Log parser
+Log Parsing
+(!!, !", … , !#)
+Log sequence
+Log Grouping Feature Extraction
+Quantitative vectors
+Anomaly Detection
+Classical 
+ML-based Models
+SVM    LogCluster…
+Deep Learning Models
+LSTM       CNN       …
+With 
+Log parsing
+Without 
+Log parsing
+Preprocessing Neural Representation
+Log messages
+i. 081109 205931 13 INFO dfs.DataBlockScanner: 
+Verification succeeded for
+Remove number, 
+punctuation, ...Contents
+i. info dfsdatablockscannerverification succeeded for
+WordPiece Tokenization
+Neural Encoder
+OR
+Semantic Vectors
+Semantic vectors
+Abnormal
+Figure 1: Overview of log anomaly detection work!ow
+layer, whose network depth is much shallower than the DL archi-
+tecture.(2) Computation cost:KNN, DT, and SLFN are relatively
+computationally e"cient, especially during the inference phase. In
+contrast, CNNs, LSTMs, and BERT are computationally expensive
+due to their complex architectures and large number of parameters.
+3 EXPERIMENTAL SETUP
+3.1 Research Questions
+In this study, we aim to demonstrate that DL methods may not
+always o#er advantages over other approaches in log anomaly de-
+tection. To accomplish this, we investigate three research questions:
+•RQ1Do DL methods have advantages over simple ones on
+log anomaly detection?
+•RQ2Why do intricate anomaly detection methods not out-
+perform simple ones? outperform simple ones?
+•RQ3When do we need really DL methods?
+3.2 Experimental Environments
+The experiments are run on a Linux workstation with a 192GB
+Memory, and GeForce RTX A6000 GPU. The Linux workstation is
+running 64-bit Red Hat 4.8.5-28.
+3.3 Dataset
+Based on our review of experience reports [16,33], empirical stud-
+ies [43], and surveys [32,39], we found that most of the log anomaly
+datasets only contains binary labels, namely, normal and abnormal.
+As a result, log anomaly detection is treated as a binary classi!ca-
+tion task. In this paper, we evaluate log anomaly detection methods
+using!ve commonly used public datasets: HDFS [80], Blue Gene/L
+(BGL), Thunderbird, Liberty, and Spirit [63].
+The HDFS dataset, collected by Xu et al. [80] on the Amazon
+EC2 platform, consists of 11,175,629 log messages. The logs are seg-
+mented into log sequences using block IDs and assigned a ground
+truth label ofnormalorabnormal. The BGL, Thunderbird, Liberty,
+and Spirit datasets are message-wise log datasets collected from
+supercomputers, and their statistical information is provided in
+Table 1. The logs contain alert and non-alert messages, which are
+distinguished by alert category tags. In the!rst column of the log,
+‘-’ denotes non-alert messages while the rest indicate alert mes-
+sages. The alert and non-alert messages are consideredabnormal
+andnormal, respectively. Given the substantial size of the Liberty,
+Spirit, and Thunderbird datasets, consisting of over 200 million mes-
+sages [63], we opted to selectively include a modest subset of 3.7%,
+3.9%, and 4.7% respectively, employing a chronological selection
+strategy. For HDFS datasets, we randomly split them into training
+and testing sets with a ratio of 8:2. As for the supercomputer log
+datasets, we split them into training and testing sets with a ratio of
+8:2 in a chronological manner.
+Table 1: Descriptive Statistics of log datasets
+Dataset Category Label Granularity #Messages #Anomalies
+HDFS Distributed system block-wise 11,175,629 16,838
+Blue Gene /L Supercomputer message-wise 4,747,963 348,460
+Thunderbird Supercomputer message-wise 10,000,000 353,794
+Spirit Supercomputer message-wise 7,983,345 768,142
+Liberty Supercomputer message-wise 10,000,000 3,256,972
+3.4 Evaluated Models
+In our experiments, we focus on revisiting the current log-based
+anomaly detection methods; therefore, we evaluate several repre-
+sentative classical ML-based methods and DL methods. For simple
+methods, we evaluate DT [15] SLFN [34], and KNN [27]. For DL
+Based methods, we evaluate CNN [52], LogRobust [85], and Neu-
+ralLog [42]. We evaluate DT, LogRobust, NeuralLog, and CNN by
+using the open-sourced implementation [1,2,42]. For KNN and
+SLFN, we implement them by ourselves. or DL methods with the
+parser, we used Drain [31], a widely adopted parser with good per-
+formance for log preprocessing. For simple methods, we preprocess
+the log by tokenizing the log and removing the digits, instead of
+adopting the parser. Speci!cally, we construct event frequency vec-
+tors for block-wise dataset by grouping the logs with the block ID.
+We evaluate each model!ve times and take their average results.
+3.5 Evaluation Metrics
+To measure the e#ectiveness of the anomaly detection methods, we
+use the Precision, Recall, and𝐿1-Score metrics, represented by the
+abbreviations P, R, F1, respectively. We characterize their outcome
+as True Positive (TP), True Negative (TN), False Positive (FP), False
+Negative (FN). TP represents the number of abnormal log sequences
+that are correctly detected by the anomaly detection methods. TN
+represents the number of normal log sequences that are correctly
+detected by the anomaly detection methods. FP represents the num-
+ber of log sequences that are mistakenly identi!ed as anomalies.
+
+=== PAGE 5 ===
+Deep Learning or Classical Machine Learning? An Empirical Study on Log-Based Anomaly Detection ICSE ’24, April 14–20, 2024, Lisbon, Portugal
+FN represents the abnormal log sequences that are not detected by
+the anomaly detection methods. The evaluation metrics are de!ned
+as below:
+•𝑅𝑃𝑄𝑁𝑆𝑀𝑆𝑂𝑇: the ratio between number of correctly detected
+anomalies and number of detected anomalies:𝑅𝑃𝑄𝑁=𝐿𝑀 𝐿𝑀+𝑁𝑀
+•𝑈𝑄𝑁𝑉𝑊𝑊: the ratio between number of correctly detected anom-
+alies and total number of anomalies:𝑈𝑄𝑁𝑉𝑊𝑊=𝐿𝑀 𝐿𝑀+𝑁𝑂
+•𝐿1𝑀𝑁𝑂𝑃𝑄: the harmonic mean between𝑅𝑃𝑄𝑁𝑆𝑀𝑆𝑂𝑇and𝑈𝑄𝑁𝑉𝑊𝑊:
+𝐿1𝑀𝑁𝑂𝑃𝑄=2→𝑀𝑃𝑄𝑅→𝑆𝑄𝑅𝑇𝑈𝑈 𝑀𝑃𝑄𝑅+𝑆𝑄𝑅𝑇𝑈𝑈
+4 RESULTS AND DISCUSSIONS
+4.1RQ1: Do DL Methods Have Advantages Over
+Simple Ones on Log Anomaly Detection?
+To address this question, we utilize simple anomaly detection mod-
+els (KNN, DT, SLFN) and compare them with three SOTA DL meth-
+ods (CNN [52], LogRobust [85], NeuralLog [42]) in terms of both ac-
+curacy and runtime e"ciency. For the simple approaches, we utilize
+di#erent preprocessing strategies for block-wise and message-wise
+log datasets.
+We process the block-wise dataset (HDFS [80]) by extracting
+the tokens from each text log message (excluding header) split by
+spaces and removing any tokens containing digits. We group the log
+messages into log sequences using𝑋𝑊𝑌𝑉𝑊and encode them with the
+event frequency. The entire preprocessing work$ow is illustrated
+in Fig. 2.
+For the message-wise datasets (BGL, Thunderbird, Spirit, and
+Liberty), our anomaly detection method is even simpler. Fig. 3
+illustrates the approach, where we begin by tokenizing the log
+messages using the same way as in the HDFS dataset. However, we
+do not convert the tokenized log messages into numerical vectors.
+Rather, we calculate the Jaccard distance to measure the distance
+between log messages:
+𝑍𝑉𝑁𝑁𝑉𝑃𝑎(𝑏,𝑐)=1↑|𝑏↓𝑐| |𝑏↔𝑐|, (1)
+where𝑏and𝑐each represent the set of a single tokenized log
+message. We then pair each tokenized log message in the testing
+set with its nearest log message in the training set. The predicted
+label of a log message in the testing set is aligned with that of the
+paired log message in the training set. To ensure fairness when
+comparing our simple methods with the DL methods, we set the
+window size and stride to 10 in the evaluation stage, as in the DL
+methods.
+For the DL methods, we follow the preprocessing methods and
+hyper-parameters settings in the original paper. We empirically
+tune the parameters by grid search with cross-validation approach
+if the hyper-parameters are not provided in the paper or the method
+hasn’t been tested on a speci!c dataset. For the simple methods, we
+also tune the hyper-parameters by grid search with cross-validation.
+Speci!cally, we set the number of neighbors as 1 in KNN.
+4.1.1 Comparison on Accuracy.Table 2 displays the performance
+scores of both deep methods (CNN [52], LogRobust [85], Neural-
+Log [42]) and simple methods (KNN, DT, SLFN). Due to the incom-
+patibility of DT and SLFN with the data format derived from our
+speci!c preprocessing methods for message-wise datasets, these
+techniques were not evaluated on these datasets. Consequently,
+their corresponding evaluation metrics are The highest scores are
+indicated in bold font. Overall, it is evident that the simple methods
+outperform the complex ones. Across all!ve datasets, there is at
+least one simple method that can achieve the highest precision rate,
+recall rate, and𝐿1-Score. Only on liberty, NeuralLog can achieve
+the perfect score, drawing with KNN.
+Fig. 4 compares the performance delta between the best simple
+methods and the best deep methods. Liberty is not included in Fig. 4
+for the best deep method (NeuralLog) and KNN can both achieve
+perfect scores. Simple methods beat the deep ones on all the other
+four datasets with respect to all the evaluation metrics. Note that
+the highest precision, recall, or𝐿1-Score may not come from the
+same model.
+To show the superiority of the classical ML methods, we compare
+them with DL methods on a more challenging benchmark, i.e., we
+only use 1% of the data in the train dataset for training the model.
+The results are shown in Table 3, where we can see that many DL
+methods’ performance is largely undermined. For instance, CNN
+achieved a mere 0.0440𝐿1-Score on Spirit, while LogRobust [85]
+achieved only 0.5579𝐿1-Score on BGL. In contrast, KNN demon-
+strated a range of𝐿1-Scores from 0.9135 to 1.000. These!ndings
+indicate that the simpler methods exhibit greater robustness when
+faced with the challenges presented by this benchmark.
+Table 2: Overall Performance on"ve public datasets
+Dataset CNN LogRobust NeuralLog KNN (N=1) DT SLFN
+P 0.9840 0.9858 0.9942 0.9986 0.99880.9962
+HDFS R 0.9895 0.9890 0.9970 1.0000 0.9991 0.9962
+F1 0.9867 0.9874 0.9956 0.9988 0.99900.9962
+P 0.5988 0.6120 0.9493 0.9747 N/A N/A
+BGL R 0.9749 0.9749 0.9796 0.9858 N/A N/A
+F1 0.7419 0.7520 0.9641 0.9802 N/A N/A
+Thunder-
+bird
+P 0.9680 0.9613 0.9922 0.9939 N/A N/A
+R 0.8785 0.9025 0.8833 1.0000 N/A N/A
+F1 0.9211 0.9310 0.9345 0.9970 N/A N/A
+P - - 0.9770 1.0000 N/A N/A
+Spirit R - - 0.9414 1.0000 N/A N/A
+F1 - - 0.9587 1.0000 N/A N/A
+P 0.9999 0.9985 1.0000 1.0000 N/A N/A
+Liberty R 0.9999 0.9985 1.0000 1.0000 N/A N/A
+F1 0.9936 0.9932 1.0000 1.0000 N/A N/A
+‘-’ denotes “out of memory” error, N/A denotes not applicable.
+4.1.2 Comparison on Time E!iciency.Table 4 illustrates both the
+training time and inference time of all the methods we evaluate.
+We use bold fonts to indicate the least runtime. In general, simple
+methods run faster than deep methods on all!ve datasets in terms
+of both training time and inference time. On HDFS, KNN has the
+shortest training time (e.g., 3,225𝑑faster than NeuralLog) while DT
+has the shortest inference time (e.g.,185𝑑faster than NeuralLog).
+In the case of the other four supercomputer datasets, we also see
+a signi!cant e"ciency advantage with our KNN approach during
+both the training and inference stages. For instance, KNN’s training
+time on BGL is1,278𝑑faster than NeuralLog, and KNN’s inference
+time on BGL is23𝑑faster than NeuralLog. Even though our ex-
+periment is conducted with 192GB RAM, CNN and LogRobust still
+cause “out of memory” error on Spirit, indicating deep methods’
+high demand for hardware.
+
+=== PAGE 6 ===
+ICSE ’24, April 14–20, 2024, Lisbon, Portugal Boxi Yu, Jiayi Yao, Qiuai Fu, Zhiqing Zhong, Haotian Xie, Yaoliang Wu, Yuchi Ma, and Pinjia He
+Raw Log Messages
+RASKERNELINFOCEsym<*>,at<*>,mask<*>,
+…………
+RASKERNELINFO<*>,ddrerrors(s)detectedandcorrectedon
+rank<*>,,bit<*>
+11198591912005.06.27R16-M1-N2-C:J17-U012005-06-27-00.59.51.127175
+R16-M1-N2-C:J17-U01RASKERNELINFOCEsym0,at0x1b8594e0,mask
+0x40
+…………
+11214846592005.07.15R33-M0-N6-C:J13-U112005-07-15-20.30.59.176883
+R33-M0-N6-C:J13-U11RASKERNELINFO1ddrerrors(s)detectedand
+correctedonrank0,bit7
+Tokenized Log Messages
+Eliminate headers and 
+numerical tokens
+Raw Log Messages
+Eliminate headers and numerical tokens
+blk_3777400576053320362:
+Received block <*> of size <*> 
+from <*>
+blockMap updated: <*> is 
+added to <*> size <*>
+…………
+Tokenized Log Messages in Blocks
+blk_5852844080027817147:
+PacketResponder<*> for block 
+<*> terminating
+Received block <*> of size <*> 
+from <*>
+…………
+…
+Log Vectors
+blk_3777400576053320362:
+[5, 0, 0, 0 ……]
+blk_-5852844080027817147:
+[1, 0, 3, 0 , ……]
+…………
+Event-frequency Vectorization
+1081109 213028 2206 INFO 
+dfs.DataNode$PacketResponder: Received 
+block blk_3777400576053320362 of size 
+67108864 from /10.251.31.5
+081109 213217 2267 INFO 
+dfs.DataNode$PacketResponder: 
+PacketResponder0 for block blk_-
+5852844080027817147 terminating
+…………
+Figure 2: Preprocessing of block-wise datasets for simple methods
+Raw Log Messages
+RASKERNELINFOCEsym<*>,at<*>,mask<*>,
+…………
+RASKERNELINFO<*>,ddrerrors(s)detectedand
+correctedonrank<*>,,bit<*>
+11198591912005.06.27R16-M1-N2-C:J17-U012005-06-
+27-00.59.51.127175R16-M1-N2-C:J17-U01RASKERNEL
+INFOCEsym0,at0x1b8594e0,mask0x40
+…………
+11214846592005.07.15R33-M0-N6-C:J13-U112005-07-
+15-20.30.59.176883R33-M0-N6-C:J13-U11RASKERNEL
+INFO1ddrerrors(s)detectedandcorrectedonrank0,bit7
+Tokenized Log Messages
+Eliminate headers and numerical tokens
+Figure 3: Preprocessing of message-wise datasets for simple
+methods
+Table 3: Overall Performance on"ve public datasets (1% train-
+ing dataset)
+Dataset CNN LogRobust NeuralLog KNN (N=1) DT SLFN
+P 0.8782 0.9104 0.9387 0.9824 0.97960.9537
+HDFS R 0.7601 0.8498 0.8246 0.9713 0.99170.8032
+F1 0.8177 0.8747 0.8766 0.9766 0.98560.8714
+P 0.3792 0.4869 0.7903 0.9935 N/A N/A
+BGL R 0.9028 0.7661 0.9324 0.9754 N/A N/A
+F1 0.5055 0.5579 0.8258 0.9844 N/A N/A
+Thunder-
+bird
+P 0.4435 0. 9492 0.9997 0.9912 N/A N/A
+R 0.8559 0.8277 0.8790 0.9048 N/A N/A
+F1 0.5728 0.8836 0.9354 0.9455 N/A N/A
+P 0.0979 0.0307 0.4039 0.9193 N/A N/A
+Spirit R 0.0651 0.0368 0.3126 0.9078 N/A N/A
+F1 0.0440 0.0321 0.3430 0.9135 N/A N/A
+P 0.9479 0.9746 1.0000 1.0000 N/A N/A
+Liberty R 0.9844 0.9895 1.0000 1.0000 N/A N/A
+F1 0.9657 0.9817 1.0000 1.0000 N/A N/A
+N/A denotes not applicable.
+Table 4: Training and Inference E#ciency on"ve public
+datasets (seconds)
+Dataset CNN LogRobust NeuralLog KNN (N=1) DT SLFN
+HDFS Train 74.7774 41.4481 6,044.0218 1.8742 2.3986 29.8954 Infer 2.7748 2.2360 55.4187 2.3104 0.29940.4844
+BGL Train 75.0809 63.3461 5,188.3536 4.0601 N/A N/A Infer 3.2555 3.2807 72.9399 3.1934 N/A N/A
+Thunder-
+bird
+Train 581.3999 592.0321 10,218.6227 10.2145 N/A N/A
+Infer 30.8276 29.6045 85.5081 10.4084 N/A N/A
+Spirit Train - - 6,626.9311 7.5750 N/A N/A Infer - - 110.3898 2.1295 N/A N/A
+Liberty Train 440.0547 473.2985 10,187.34908 9.6261 N/A N/A Infer 26.0857 30.0932 94.7462 4.3901 N/A N/A
+‘-’ denotes “out of memory” error, N/A denotes not applicable.
+Table 5 compares the runtime of di#erent log preprocessing
+strategies. The least preprocessing time is marked in bold. CNN and
+LogRobust both utilize a log parser to generate log templates from
+which log semantics is extracted. NeuralLog adopts a neural repre-
+sentation method to preprocess raw logs into log vectors without
+0.0046
+0.0254
+0.0017
+0.023
+0.0030 0.0062
+0.0975
+0.0586
+0.0044
+0.0161
+0.0625
+0.0413
+0
+0.02
+0.04
+0.06
+0.08
+0.1
+0.12
+HDFS BGL Thunderbird Spirit
+Score Delta (Best simple 
+method-Best deep method)
+Precision
+Recall
+F-score
+Figure 4: Comparison of performance scores between the
+best simple method and the best deep method
+parsing. Our naive preprocessing has the least runtime on all the
+!ve datasets we use. Our naive preprocessing strategies for simple
+methods run4𝑑to12𝑑faster than the neural representation on
+the!ve log datasets, and13.6𝑑to19.3𝑑faster than the log parser
+with semantics extraction on the four log datasets, where the time
+for preprocessing Spirit via the log parser is omitted due to “out of
+memory” error.
+RQ1 Answer: DL methods are neither better in performance
+scores nor runtime e"ciency than simple methods on log anom-
+aly detection.
+Table 5: Preprocessing E#ciency on"ve public datasets (sec-
+onds)
+Method HDFS BGL Thunderbird Spirit Liberty
+Parser+Semantics 980.2582 434.9437 1,114.0291 - 1,244.7097
+Neuralrepresentation 289.1004 205.1231 323.4426 568.4599 484.8715
+Ours 71.892723.7540 75.1366 47.0459 64.4417
+‘-’ denotes “out of memory” error
+4.2 RQ2: Why Do Intricate Anomaly Detection
+Methods Not Outperform Simple Ones?
+To gain insight into the reasons behind the comparable, and often-
+times superior, performance of simplistic binary classi!ers over in-
+tricately designed DL methods in the context of log-based anomaly
+detection, we propose three potential explanations: (1) the utiliza-
+tion of redundant log preprocessing strategies, (2) the relatively
+straightforward nature of the datasets, and (3) the intrinsic charac-
+teristics of binary classi!cation tasks.
+4.2.1 Redundant Log Preprocessing Strategies.As shown in RQ1,
+complicated log preprocessing methods are much slower than our
+simple preprocessing methods. Furthermore, deep methods based
+
+=== PAGE 7 ===
+Deep Learning or Classical Machine Learning? An Empirical Study on Log-Based Anomaly Detection ICSE ’24, April 14–20, 2024, Lisbon, Portugal
+on complex log preprocessing do not show any advantage over
+their simple counterparts in terms of both performance score and
+runtime e"ciency. In addition to the uncalled-for log vectorization
+methods, log grouping strategies should be carefully examined in
+accordance with the granularity of labels. For HDFS dataset [80],
+most anomaly detection methods aggregate logs with the identi!er,
+which is reasonable for the fact that Xu et al. [80] labeled the dataset
+on the block level. However, the reason why the recent line of re-
+search adopts session window grouping on supercomputer datasets
+is unclear. According to the original paper [63] that introduces
+the supercomputer datasets, the labeling procedure is performed
+on log message level with a combination of regular expressions
+and system administrators’ intervention. Therefore, it is reasonable
+for us to challenge the validity of window-wise log grouping in
+anomaly detection. As shown in Table 2, KNN with our simple log
+preprocessing strategies outperforms the DL methods, especially
+for the message-wise datasets. For instance, on Thunderbird, the𝐿1-
+Score of KNN is 0.0625 higher than the best DL method NeuralLog.
+This could support our claim that message-wise datasets shouldn’t
+be aggregated by windows. As for NeuralLog, its performance dis-
+parity with simple methods remains relatively stable on di#erent
+datasets (F-score di#erence: 0-0.0625). However, to further show
+that window aggregation is unnecessary, we re-run NeuralLog with
+a window size of 1 on BGL, Thunderbird, and Spirit. Liberty is not
+used for NeuralLog can already achieve perfect score with window
+size 10. Fig. 5 shows the score delta of NeuralLog when setting
+its window size to 1 and 10, respectively. The𝐿1-Scores on the
+three datasets are improved by 0.0007, 0.0401, and 0.0077, which
+demonstrate that the session window is useless. Although avoiding
+grouping improves the performance of NeuralLog, its𝐿1-Scores on
+the three datasets are still lower than KNN.
+0.0162
+0.0013
+-0.0101
+-0.0023
+0.0734
+0.0112
+0.0007
+0.0401
+0.0077
+-0.02
+-0.01
+0
+0.01
+0.02
+0.03
+0.04
+0.05
+0.06
+0.07
+0.08
+BGL Thunderbird Spirit
+Score Delta (NeuralLogwindow=1 
+–NeuralLogwindow=10)
+Precision
+Recall
+F-score
+Figure 5: Comparison of NeuralLog performance scores when
+setting window to 1 and 10
+4.2.2 Simplicity of the Datasets.The overwhelming extent of data
+leakage might be a potential reason why simple methods can achieve
+extremely high scores. Note that di#erent preprocessing strate-
+gies may lead to di#erent extent of data leakage. Thus, for all!ve
+datasets, we!rst preprocess the data with our naive strategy and
+log parser, respectively. Then we record the number of test data
+that have/haven’t appeared in the training set in the second and
+third column in Table 6. We further measure the extent of data
+leakage with the percentage of leaked data in the fourth column.
+Except for BGL, data leakage on the other four datasets all exceeds
+98%. To show how data leakage can make anomaly detection easier,
+we adopt a very naive matching algorithm: (1) if the test data has
+an identical match in the training set, it should have the same label
+as the matched training data, (2) otherwise, we randomly predict
+the label with uniform distribution (p=0.5). As shown in the last
+column of Table 6, the naive matching algorithm can achieve an
+𝐿1-Score of 0.9968 with both our naive preprocessing and log parser
+on HDFS. Combining with Table 2, we can see naive match can
+outperform all the intricate deep models! The naive match method
+achieves a perfect score on the Liberty dataset, just like NeuralLog,
+and slightly outperforms CNN and LogRobust. While the naive
+match falls short in achieving satisfactory scores on BGL, Thunder-
+bird, and Spirit, the presence of a substantial amount of leaked data
+in the test dataset might still aid in anomaly detection.
+Table 6: Extent of Data leakage and results with naive match
+Dataset # Unique # Duplicate % Duplicate F-score by naive match
+HDFS ours 46 114,967 0.9996 0.9968 parser 46 114,967 0.9996 0.9968
+BGL ours 426,475 523,118 0.5509 0.2222 parser 425,749 516,950 0.5484 0.2244
+Thunder-
+bird
+ours 10,791 1,989,209 0.9946 0.8726
+parser 37,095 1,957,932 0.9814 0.6659
+Spirit ours 295 1,596,374 0.9998 0.8926 parser 4,537 1,587,210 0.9971 0.3512
+Liberty ours 1 1,999,999 1.0000 1.0000 parser 58 1,989,720 1.0000 1.0000
+To further investigate whether data leakage is a major contrib-
+utor to the high anomaly detection accuracy, we eliminate the
+repetitive log sequences in the HDFS dataset. We use the ground
+truth template to perform the elimination process, and the dedu-
+plicated HDFS only 589 log vectors. Then we run all the methods
+again on the dataset without data leakage. However, we are unable
+to perform the same elimination process on the four supercomputer
+datasets in that the anomaly detection should be conducted on the
+log message level, and eliminating duplicate log messages seems to
+be far divorced from real-world scenarios.
+Table 7 displays the results obtained by various methods on the
+original HDFS, deduplicated HDFS, and deduplicated HDFS with
+Bayesian tuner. The highest scores are highlighted in bold. Notably,
+all methods experience a decline in performance when duplicate
+log sequences are eliminated. This decline is more pronounced in
+the case of deep methods compared to simpler ones. While the𝐿1-
+Scores for all three simple methods remain above 0.9, deep methods
+achieve an𝐿1-Score of approximately 0.8. It’s worth mentioning
+that we adhere to the hyperparameters outlined in RQ1. However,
+di#erent methods may exhibit varying sensitivity to their respective
+hyperparameters. Consequently, we!ne-tune the hyperparameters
+for each method using Bayesian optimization [72]. Tables 8 and 9
+provide details on the hyperparameters and their tuning ranges for
+simple methods and deep methods, respectively. As demonstrated
+in Table 7, Bayesian tuning signi!cantly enhances the𝐿1-Scores
+for all methods. All simple methods achieve an𝐿1-Score of ap-
+proximately 0.94. Among the deep methods, CNN experiences the
+most substantial improvement, increasing its𝐿1-Score from 0.8011
+to 0.9244, while reducing the𝐿1-Score gap with the best simple
+method (i.e., DT) from 0.1389 to 0.0166. However, LogRobust and
+NeuralLog only achieve𝐿1-Scores of 0.8017 and 0.8464, respectively.
+
+=== PAGE 8 ===
+ICSE ’24, April 14–20, 2024, Lisbon, Portugal Boxi Yu, Jiayi Yao, Qiuai Fu, Zhiqing Zhong, Haotian Xie, Yaoliang Wu, Yuchi Ma, and Pinjia He
+In summary, simple methods continue to outperform deep methods
+on deduplicated log dataset.
+Table 7: Comparison of results on original hdfs and dedupli-
+cated hdfs
+Dataset CNN LogRobust NeuralLog KNN DT SLFN
+P 0.9840 0.9858 0.9971 0.99860.99880.9962
+Original HDFS R 0.9895 0.9890 0.9984 1.00000.9991 0.9962
+F1 0.9867 0.9874 0.9977 0.99880.99900.9962
+P 0.6690 0.6644 0.6847 0.89750.90290.8871
+Deduplicated HDFS R 1.0000 1.0000 0.9707 0.9263 0.9816 1.0000
+F1 0.8011 0.7979 0.8005 0.91050.94000.9399
+Deduplicated HDFS
+with Bayesian Tuner
+P 0.9009 0.6710 0.8218 0.8945 0.8967 0.8930
+R 0.9542 0.9975 0.8818 0.9922 0.9920 0.9947
+F1 0.9244 0.8017 0.8464 0.94060.94100.9407
+…
+Cross Validation
+Training Data
+Bayesian Optimizer
+solver: {‘adam’, ‘sgd’, …}
+activation: {‘logistic’, …}
+…
+max_depth: {1, 2, 3, 4, …} 
+min_leaf_node: {1, 2, 3,…}
+…
+parameter_1: {‘linear’, …} 
+parameter_2: {1, 2, 3, …}
+…
+Model & Parameter Pool Optimization Goals
+Training Time
+Inference Time
+Validation Score
+Is your model
+“the BEST” ? 
+Simple baseline models
+Your proposed model
+…
+Testing Data
+Figure 6: Work!ow of LightAD
+4.2.3 Innate Nature of Binary Classification in Log Anomaly De-
+tection.The task of binary classi!cation can invariably be concep-
+tualized as the partitioning of a multi-dimensional space into two
+distinct segments, achieved through the use of one or more hy-
+perplanes. A pertinent question arises in log anomaly detection:
+Can binary classi!cation inherently be addressed through the ap-
+plication of simplistic methods? Simple non-parametric methods
+(e.g., KNN, DT) should always have good results as long as the
+data characteristics of train data do not deviate much from the test
+data. According to Huang et al. [34], SLFN with a non-constant
+bounded activation function (e.g., sigmoid) can form disjoint deci-
+sion regions with arbitrary shapes in a multi-dimensional space.
+This conclusion can be further generalized to certain non-bounded
+activation functions [34]. In the context of binary classi!cation in
+log anomaly detection, the log data, owing to the inherent patterns
+exhibited in the logging systems, may invariably encompass re-
+curring log data within the corpus. As a result, simple methods
+such as KNN, DT, and SLFN are considered potential candidate
+methods for e#ectively addressing the binary classi!cation task of
+log anomaly detection. Therefore, it is unnecessary to adopt intri-
+cate time-consuming deep methods before the attempt to adopt
+time-consuming DL methods. Moreover, the intricate network may
+sometimes back!re on a simple binary classi!cation task. As shown
+in Table 7, even with optimal hyper-parameters, the𝐿1-Score of
+LogRobust is only 0.8017, much worse than the average𝐿1-Score
+of 0.94 for the simple methods on deduplicated HDFS. LogRobust
+leverages the sequential information of log event occurrence by
+adopting LSTM architecture. However, the order of log event oc-
+currence might be misleading for anomaly detection since HDFS is
+labeled with respect to event count vectors [80].
+RQ2 Answer: Intricate log anomaly detection methods cannot
+outperform the simple methods due to (1) redundant log pre-
+processing strategies, (2) simplicity of dataset, (3) the innate
+nature of binary classi!cation in log anomaly detection.
+4.3RQ3: When Do We Really Need DL Methods?
+In the!eld of log-based anomaly detection, most research [42,52,
+85] do not compare the proposed models with their naive counter-
+parts appropriately.
+In the context of log-based anomaly detection, or in a wider con-
+text of binary classi!cation tasks, complex models might always be
+inferior to their naive counterparts. Bear in mind that the inferiority
+may come from both accuracy and e"ciency. However, there are
+several reasons why most research [52,85] claim their proposed
+models are better than the naive baseline models: (1) ignored base-
+line models, (2) potential ine#ective hyper-parameter tuning, (3)
+overlook in time e"ciency.
+Many naive binary classi!ers are not included in the comparison
+when a new model is proposed. LogRobust [85] and NeuralLog [42]
+compare themselves with only two simple methods, LR [9] and
+SVM [47]. None of the simple methods (KNN, DT, SLFN) we adopt
+is included in their comparison. CNN [52] doesn’t include any naive
+binary classi!ers in the paper.
+Ine#ective parameter tuning may provide a false conclusion that
+the proposed model is better than the naive ones. For instance, Le
+et al. [42] claim that NeuralLog can achieve an𝐿1-Score of 0.98
+while SVM can only achieve an𝐿1-Score of 0.96. Note that they
+employ Loglizer [2] for SVM implementation. Loglizer’s SVM is
+implemented with sklearn.LinearSVC [66] which only supports
+linear kernels. The𝐿1-Score on HDFS can be easily boosted to 0.99
+by adopting a polynomial kernel with sklearn.svm.SVC.
+In log anomaly detection, both training time and inference time
+are important. Due to the huge size of log data [60], it takes a long
+time for the model to retrain the model with the mountains of
+data. Besides, long inference time may lead to more revenue lost
+if the anomalies of the software systems have not been reported
+in time. [23]. Recent DL studies rarely provide an analysis of time
+e"ciency with the most e"cient classical approaches (e.g., DT,
+KNN, or SLFN).
+To determine whether a proposed model is really worth using,
+we propose LightAD, an automated framework to compare the
+proposed anomaly detection model with naive baseline models.
+Fig. 6 shows the work$ow of LightAD. We!rst prepare the set of
+naive baseline models and their corresponding hyper-parameter
+spaces. The hyper-parameter space for the proposed model should
+also be prepared. For each model, we optimize its hyper-parameters
+with respect to ModelGain which leverages three aspects of the
+model performance: (1) accuracy, (2) training time per log sequence
+and (3) inference time per log sequence. We formalize ModelGain
+as the following:
+
+=== PAGE 9 ===
+Deep Learning or Classical Machine Learning? An Empirical Study on Log-Based Anomaly Detection ICSE ’24, April 14–20, 2024, Lisbon, Portugal
+Table 8: Parameter Pool for simple methods
+Models Parameters Default Tuning Range Description
+KNN n_neighbors 5 [1,10] Number of the nearest neighbors used for classi!cation. metric “euclidean” [“euclidean”, “manhattan”, “cosine”] Metric to use for distance computation.
+criterion “gini” [“gini”, “entropy”, “log_loss”] The function to measure the quality of a split.
+splitter “best” [“best”, “random”] The strategy used to choose the split at each node.
+DT max_depth None None↔[5, 70] Maximum depth of the tree.
+min_samples_split 2 [2, 5] Minimum number of samples required to split an internal node.
+min_samples_leaf 1 [1, 5] Minimum number of samples required to be at a leaf node.
+hiddenneurons 100 [10, 200] Number of neurons in the hidden layer.
+activation “relu” [“identity”, “relu”, “logistic”, “tanh”] Activation function for the hidden layer.
+SLFN alpha 1e-4 [1e-6, 1e-2] Strength of the L2 regularization term.
+tol 1e-4 [1e-6, 1e-2] Tolerance for the optimization.
+max_iter 200 [20, 400] Maximum number of iterations.
+Table 9: Parameter Pool for deep methods
+Models Parameters Default Tuning Range Description
+hidden_size 128 [1, 256] Number of neurons in the hidden layer.
+embedding_dim 32 [1, 64] The embedding size for log events.
+CNN epoches 5 [1, 20] Maximum number of iterations.
+learning_rate 0.05 [1e-3, 1e-1] The learning rate during training phase.
+batch_size 1,024 [32, 2048] Number of samples that will be propagated.
+hidden_size 128 [1, 256] Number of neurons in the hidden layer.
+embedding_dim 32 [1, 128] The embedding size for log events.
+epoches 5 [1, 20] Maximum number of iterations.
+LogRobust learning_rate 1e-2 [1e-3, 1e-1] The learning rate during training phase.
+batch_size 1,024 [16, 2,048] Number of samples that will be propagated.
+num_layers 2 [2, 12] Number of layers in the fully connected neural network.
+num_directions 2 [1, 2] Number of directions used in LSTM
+#_dim 2,048 [1536, 2560] Size of the feed-forward network.
+epoches 20 [5, 50] Maximum number of iterations.
+batch_size 64 [1, 64] Number of samples that will be propagated.
+NeuralLog init_lr 3e-4 [1e-4, 1e-1] Initial learning rate.
+num_heads 12 [2, 6] Number of attention heads.
+dropout 1e-1 [1e-2, 1e-1] The dropout rate during training phase.
+val_ratio 0.1 [0.1,0.4] The ratio of validation set in train set.
+𝑒𝑂𝑎𝑄𝑊𝑓𝑉𝑆𝑇=𝑔1→𝐿↑˜𝐿0 𝐿0 +𝑔2→𝑕𝑋𝑃𝑇𝑉𝑌↑˜𝑕0 𝑕0
++𝑔3→
+𝑕𝑉𝑌𝑍 𝑄𝑃↑˜𝑕1
+𝑕1
+(2)
+where𝐿stands for𝐿1-Score,𝑕𝑋𝑃𝑇𝑉𝑌and𝑕𝑋𝑄𝑎𝑋are the training
+and inference time per log sequence respectively.𝑔1,𝑔2and𝑔3
+are three positive constants, indicating the relative importance of
+model accuracy, training e"ciency, and inference e"ciency.𝐿0,˜𝐿0,
+𝑕0,˜𝑕0,𝑕1and˜𝑕1are predetermined normalization constants to make
+the aggregation of metrics with di#erent units reasonable. Note that
+𝐿0should be positive and𝑕0,𝑕1should be negative since higher
+𝐿1-Score and shorter training and inference time are preferred.
+For each model, its hyper-parameters are optimized with Bayesian
+Tuner [72]. Finally, we calculate the ModelGain for each model on
+the test dataset. The model with the highest ModelGain is the best
+model. If the best model happens to be the proposed model, then
+we conclude that the proposed model is valuable. Otherwise, the
+proposed model is inferior to the best simple model. The main steps
+of LightAD are described in Fig. 7.
+Table 10 shows the output model under di#erent priorities. The
+highest scores under di#erent priorities are marked in bold. The
+!rst column indicates the objective we want to prioritize upon
+which, in the second column, we determine the weights for each
+objective. The normalization constants are set as:𝐿0=0.2,˜𝐿0=0.8,
+𝑕0=↑0.03,˜𝑕0=0,𝑕1=↑0.002and˜𝑕1=0. We only include CNN as
+“the proposed model” in that CNN has the best performance on the
+deduplicated HDFS dataset as in Table 7. As shown in the last col-
+umn of Table 10, the optimal models under di#erent priorities are all
+simple methods. According to LightAD, KNN is recommended for
+prioritizing training time, while DT is the preference for the other
+three priority settings: accuracy, inference time, and a balanced
+priority among all𝑔𝑉for𝑆↗{1,2,3}.
+RQ3 Answer: We propose LightAD, an automated framework
+to compare the proposed anomaly detection model with simple
+baseline models. On the deduplicated HDFS dataset, LightAD
+suggests simple methods are always superior to deep methods
+under di#erent priorities.
+
+=== PAGE 10 ===
+ICSE ’24, April 14–20, 2024, Lisbon, Portugal Boxi Yu, Jiayi Yao, Qiuai Fu, Zhiqing Zhong, Haotian Xie, Yaoliang Wu, Yuchi Ma, and Pinjia He
+Table 10: The optimal models output by LightAD with di$er-
+ent priorities on deduplicated HDFS
+Priority(𝑔1,𝑔2,𝑔3) Model ModelGain Optimal Model
+CNN 0.5904
+Accuracy (1.0, 0.0, 0.0) KNN 0.7000 DT
+DT 0.7030
+SLFN 0.6824
+CNN 0.2593
+Train (0.5, 0.5, 0.0) KNN 0.3514 KNN
+DT 0.3499
+SLFN 0.3377
+CNN 0.1896
+Inference (0.5, 0.0, 0.5) KNN 0.3076 DT
+DT 0.3462
+SLFN 0.3377
+CNN 0.1065
+Balanced (0.3, 0.3, 0.3) KNN 0.1850 DT
+DT 0.2121
+SLFN 0.1984
+4.4 Threats to Validity
+External Validity.With the advancement of cloud computing, a
+wide range of cloud software has emerged along with their cor-
+responding logging systems. This paper shows that simple and
+fast methods can outperform expensive cost DL methods on!ve
+public log datasets. This is due to the lack of available log anomaly
+detection datasets. For instance, Le et al. [43] study four public log
+datasets in their study, and He et al. [33] include two datasets. Our
+study contains all the log datasets of these works and adds one
+more log dataset, i.e., Liberty [63]. However, all the existing public
+log datasets are old. HDFS was collected in 2009 [80] while the
+other four supercomputer datasets were generated between 2005
+and 2007 [63]. In the future, we will collect log datasets on various
+software systems to validate the e#ectiveness of LightAD.
+Internal Validity.There are two main threats to internal validity.
+The!rst threat is that we only focus on supervised log anomaly
+detection models (e.g., LogRobust [85]) whereas unsupervised mod-
+els (e.g., DeepLog [21]) are not included. This could be a potential
+threat for us to generalize our!ndings to the entire log anomaly
+detection community. The second threat is the incomplete use of
+some log datasets. Due to the large data size of Thunderbird, Lib-
+erty, and Spirit, we only utilize speci!c segments of these datasets.
+Even though the segmentation of huge datasets is commonly used
+in previous works [42,43], di#erent selections of the log datasets
+could a#ect the results to some extent.
+5 RELATED WORK
+5.1 Empirical Studies of Classical Machine
+Learning Over Deep Learning
+Despite the remarkable performance of DL in many areas, it can
+be computationally expensive and requires a GPU for parallel com-
+putation. There are some research works [12,29,40,54,57] that
+show that DL methods are slower and less accurate than classical
+methods. For example, Cao et al. [12] showed that LSTM-based DL
+1. Let𝑏denote the set of simple models (e.g., DT, KNN),𝑐denote of
+proposed model (e.g., CNN, LogRobust) and𝑑denote𝑏↔{𝑐}. For each
+𝑒↗𝑑,Space𝐿denotes the corresponding hyper-parameter space in
+which these hyper-parameters need to be tuned.|Space𝐿|denotes the
+dimension of𝑏𝑓𝑇𝑅𝑄𝐿.
+2. LightAD initially runs each𝑒for𝑂𝐿=10→|Space𝐿|times. Each
+run is denoted asrun𝑀↗𝑁𝐿and the corresponding hyper-parameters are
+contained in set𝑔𝐿.
+3. Eachrun𝑀is scored with a certain optimization objective. In the case of
+our LightAD, the objective is to maximize ModelGain, leveraging three
+aspects of the model: accuracy, train time, and infer time. The set of scores
+is kept inSCORES(𝑒).
+4. LightAD adopts Bayesian Tuner which builds a surrogate functionS𝐿
+(e.g., Gaussian Process) based onSCORES(𝑒)and𝑔𝐿. The goal ofS𝐿
+is to approximateF𝐿=F(Score|𝑒,𝑏𝑓𝑇𝑅𝑄𝐿).𝑕𝑂𝑃𝑄=𝑇𝑃𝑖𝑒𝑇𝑗S𝐿and
+ModelGain(𝑕𝑂𝑃𝑄)are added into𝑔𝐿andSCORES(𝑒), respectively.
+5. Step 3 is repeated untilmax𝑀𝑅𝑃𝑆=10→|Space𝐿|2is reached.
+6. For each𝑒↗𝑑,BESTPARAMS(𝑒)=𝑇𝑃𝑖𝑒𝑇𝑗SCORES(m).
+7. Return the model with the highest score on the test dataset and its
+corresponding optimal hyper-parameters. If the proposed model𝑐is
+exactly the best model, then it is considered as valuable. Otherwise,𝑐is
+considered as redundant.
+Figure 7: Procedure LightAD: strive to"nd the best model
+that maximizes ModelGain on training and validation data
+and check whether the proposed model is valuable
+is1,000𝑑slower despite having lesser accuracy in system anom-
+aly detection. Menzies et al. [57] demonstrated that combining
+clustering algorithms with local classi!cation algorithms achieved
+comparable performance to DL models while running hundreds of
+times faster. Inspired by these empirical studies, we investigated
+log anomaly detection and showed that with simple data prepro-
+cessing and parameter tuning, classical machine learning methods
+can outperform DL methods and take much less time to train the
+model.
+5.2 Log-based Anomaly Detection
+Log-based anomaly detection is the task of identifying the system’s
+anomalous patterns that do not conform to the expected behav-
+iors on normal log data. The log-based anomaly detection can be
+divided into supervised learning [9,47,52] and unsupervised learn-
+ing [24,80]. Additionally, it can be divided into classical ML-Based
+log anomaly detection methods [15,80] and DL methods [24,52,62].
+Recently, NeuralLog [42] can achieve the best performance on four
+public log dataset (HDFS [80], BGL, Thunderbird, Spirit [63]) with-
+out log parsing. This paper shows that we can achieve the highest
+performance on!ve public datasets (HDFS, BGL, Spirit, Thunder-
+bird, Liberty [63]) by using simple methods without intricate log
+preprocessing.
+5.3 Automated Log Analysis
+Automated log analysis aims to enable e#ective and e"cient usage
+of software-intensity systems, consisting of four aspects: (1) auto-
+mate and assist log writing, (2) log compression, (3) log parsing, (4)
+log mining.
+
+=== PAGE 11 ===
+Deep Learning or Classical Machine Learning? An Empirical Study on Log-Based Anomaly Detection ICSE ’24, April 14–20, 2024, Lisbon, Portugal
+Logging.Event logging is an essential method for recording
+textual and numeric data of software systems, and its implementa-
+tion often depends on an empirical process during the development
+phase [65]. He et al. [32] identi!ed three main concerns of develop-
+ers regarding event logging, namely diagnosability, maintenance,
+and performance. Several works have tackled the challenges of
+automated logging, including where to log [14,35,86], what to
+log [46, 46, 78], and how to log [13, 38, 50].
+Log Compression.After collecting logs, they are typically
+stored on the hard disk for further diagnosis or auditing of sensitive
+operations. As the scale of distributed systems continues to grow,
+the storage of accumulated logs can become a burden on the storage
+system. He et al.[32] identi!ed three categories of log compression
+techniques: bucket-based compression[6,26], dictionary-based com-
+pression [18,67], and statistics-based compression [8,30]. Recently,
+some works have made progress in achieving both storage cost and
+time e"ciency [25, 82].
+Log Parsing.Log parsing is a critical component of automated
+log analysis, which converts semi-structured logs into structured
+data. Log parsing methods can be classi!ed into two groups: of-
+$ine log parsing approaches [28,53,75] and online log parsing
+approaches [17,20,31]. To address the problem of log message
+format identi!cation, Messaoudi et al.[58] proposed the MoLFI ap-
+proach, which formulates it as a multi-objective problem. Some
+works have focused on designing guidelines[37,89] to evaluate
+current log parsing methods comprehensively.
+Automated Log Mining.Automated log mining involves auto-
+matically exploring and analyzing large volumes of log data, with
+the goal of extracting useful information from the systems and
+predicting future trends to take early actions. To analyze logs auto-
+matically, textual logs must!rst be transformed into appropriate
+data formats. Several works have focused on extracting features
+from logs [4,7]. There are various topics within log mining, includ-
+ing failure prediction [68], failure diagnosis [71,87,88], anomaly
+detection [80,81,85], log-based slicing [59], log visualization [55],
+and root cause analysis [44].
+Our work focuses on anomaly detection, a typical and widely-
+explored log mining task.
+5.4 Empirical Studies on Logs
+Empirical studies are essential in log analysis, providing valuable
+insights into various aspects of academic and industrial practices.
+He et al. [32] conducted a survey covering the entire lifecycle of
+log analysis, including logging, log compression, log parsing, and
+automated log mining. Other empirical studies have focused on
+speci!c domains of log analysis, such as logging [45,83,84], log-
+based anomaly detection [16,33], software monitoring [11], cloud
+log forensics [36], and cyber security applications [41].
+Le et al. [43] conducted an empirical study on recent DL models
+for log-based anomaly detection and found that the performance
+of existing models was largely undermined by various factors, in-
+cluding training data selection strategies, di#erent dataset charac-
+teristics, and early detection capability, indicating that the problem
+of log-based anomaly detection is still unsolved.
+In contrast to previous studies, our research demonstrates that
+complex methods such as DL and intricate log preprocessing do
+not necessarily outperform simple methods like KNN, SVM, and
+DT. Additionally, our study includes!ve public log datasets, one
+more than the study conducted by Le et al [43].
+6 CONCLUSION
+In this paper, we demonstrate that simple models can outperform
+complex log vectorization methods and resource-intensive models,
+achieving superior results with reduced computation time. We
+then analyze why sophisticated DL methods fail to surpass these
+simpler techniques. To assist researchers in determining whether
+DL methods are necessary, we propose LightAD, an architecture
+that optimizes three objectives using Bayesian optimization while
+considering both performance metrics and time e"ciency. This
+approach automatically!ne-tunes hyper-parameters for di#erent
+models, facilitating a fair comparison among various techniques.
+Employing LightAD, we establish that simple methods can out-
+perform DL techniques on!ve public log datasets in terms of both
+performance metrics and time e"ciency. Based on our!ndings,
+we recommend that researchers explore simpler approaches for
+software engineering tasks before delving into DL methods. At a
+minimum, these simpler methods can serve as a baseline against
+more complex techniques.
+Moving forward, we plan to collect additional log datasets from
+widely-used open-source software (e.g., Apache Kafka) and eval-
+uate LightAD on new log benchmarks. Furthermore, we aim to
+investigate how machine learning and log vectorization techniques
+can be e#ectively applied in the log analysis domain.
+7 DATA AVAILABILITY
+The codes and data of this paper can be found at [3].
+ACKNOWLEDGMENTS
+We thank the anonymous ICSE reviewers for their valuable feedback
+on the earlier draft of this paper. This paper was supported by the
+National Natural Science Foundation of China (No. 62102340), and
+Shenzhen Science and Technology Program.
+REFERENCES
+[1]2022. A deep learning-based log analysis toolkit for automated anomaly detection.
+Retrieved April 30, 2022 from https://github.com/logpai/deep-loglizer
+[2]2022. A machine learning-based log analysis toolkit for automated anomaly
+detection. Retrieved April 30, 2022 from https://github.com/logpai/loglizer
+[3]2023. A toolkit for light automated log anomaly detection. https://github.com/
+BoxiYu/LightAD
+[4]Hen Amar, Lingfeng Bao, Nimrod Busany, David Lo, and Shahar Maoz. 2018.
+Using!nite-state models for log di#erencing. InProceedings of the 2018 26th ACM
+Joint Meeting on European Software Engineering Conference and Symposium on
+the Foundations of Software Engineering. 49–59.
+[5]Dzmitry Bahdanau, Kyunghyun Cho, and Yoshua Bengio. 2014. Neural ma-
+chine translation by jointly learning to align and translate.arXiv preprint
+arXiv:1409.0473(2014).
+[6]Raju Balakrishnan and Ramendra K Sahoo. 2006. Lossless compression for large
+scale cluster logs. InProceedings 20th IEEE International Parallel & Distributed
+Processing Symposium. IEEE, 7–pp.
+[7]Lingfeng Bao, Nimrod Busany, David Lo, and Shahar Maoz. 2019. Statistical
+log di#erencing. In2019 34th IEEE/ACM International Conference on Automated
+Software Engineering (ASE). IEEE, 851–862.
+[8]Ivan Beschastnikh, Yuriy Brun, Sigurd Schneider, Michael Sloan, and Michael D
+Ernst. 2011. Leveraging existing instrumentation to automatically infer invariant-
+constrained models. InProceedings of the 19th ACM SIGSOFT symposium and the
+13th European conference on Foundations of software engineering. 267–277.
+
+=== PAGE 12 ===
+ICSE ’24, April 14–20, 2024, Lisbon, Portugal Boxi Yu, Jiayi Yao, Qiuai Fu, Zhiqing Zhong, Haotian Xie, Yaoliang Wu, Yuchi Ma, and Pinjia He
+[9]Peter Bodik, Moises Goldszmidt, Armando Fox, Dawn B Woodard, and Hans
+Andersen. 2010. Fingerprinting the datacenter: automated classi!cation of perfor-
+mance crises. InProceedings of the 5th European conference on Computer systems.
+111–124.
+[10]Markus M Breunig, Hans-Peter Kriegel, Raymond T Ng, and Jörg Sander. 2000.
+LOF: identifying density-based local outliers. InProceedings of the 2000 ACM
+SIGMOD international conference on Management of data. 93–104.
+[11]Jeanderson Candido, Maurício Aniche, and Arie van Deursen. 2019. Contempo-
+rary software monitoring: A systematic literature review.arXiv e-prints(2019),
+arXiv–1912.
+[12]Qing Cao and Haoran Niu. 2022. Higher-order Markov Graph based Bug De-
+tection in Cloud-based Deployments. In2022 IEEE International Performance,
+Computing, and Communications Conference (IPCCC). IEEE, 153–160.
+[13]Boyuan Chen et al.2017. Characterizing logging practices in java-based open
+source software projects–a replication study in apache software foundation.
+Empirical Software Engineering22, 1 (2017), 330–374.
+[14]Boyuan Chen and Zhen Ming Jiang. 2017. Characterizing and detecting anti-
+patterns in the logging code. In2017 IEEE/ACM 39th International Conference on
+Software Engineering (ICSE). IEEE, 71–81.
+[15]Mike Chen, Alice X Zheng, Jim Lloyd, Michael I Jordan, and Eric Brewer. 2004.
+Failure diagnosis using decision trees. InInternational Conference on Autonomic
+Computing, 2004. Proceedings.IEEE, 36–43.
+[16]Zhuangbin Chen, Jinyang Liu, Wenwei Gu, Yuxin Su, and Michael R Lyu. 2021.
+Experience Report: Deep Learning-based System Log Analysis for Anomaly
+Detection.arXiv preprint arXiv:2107.05908(2021).
+[17]Hetong Dai, Heng Li, Che Shao Chen, Weiyi Shang, and Tse-Hsun Chen. 2020.
+Logram: E"cient log parsing using n-gram dictionaries.IEEE Transactions on
+Software Engineering(2020).
+[18]Sebastian Deorowicz and Szymon Grabowski. 2008. Sub-atomic!eld processing
+for improved web log compression. In2008 International Conference on" Modern
+Problems of Radio Engineering, Telecommunications and Computer Science"(TCSET).
+IEEE, 551–556.
+[19]Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2018. Bert:
+Pre-training of deep bidirectional transformers for language understanding.arXiv
+preprint arXiv:1810.04805(2018).
+[20]Min Du and Feifei Li. 2016. Spell: Streaming parsing of system event logs. In2016
+IEEE 16th International Conference on Data Mining (ICDM). IEEE, 859–864.
+[21]Min Du, Feifei Li, Guineng Zheng, and Vivek Srikumar. 2017. Deeplog: Anomaly
+detection and diagnosis from system logs through deep learning. InProceedings
+of the 2017 ACM SIGSAC conference on computer and communications security.
+1285–1298.
+[22]Facebook. 2019. Downtime, outages and failures - understanding their
+true costs. http://www.evolven.com/blog/downtime-outages-and-failures-
+understanding-their-true-costs.html
+[23]Facebook. 2019. Facebook loses $24,420 a minute during outages.
+https://www.theatlantic.com/technology/archive/2014/10/facebook-is-losing-
+24420-per-minute/382054/
+[24]Amir Farzad and T Aaron Gulliver. 2020. Unsupervised log message anomaly
+detection.ICT Express6, 3 (2020), 229–237.
+[25]Peng Fei, Zhou Li, Zhiying Wang, Xiao Yu, Ding Li, and Kangkook Jee. 2021.
+{SEAL}: Storage-e"cient causality analysis on enterprise logs with query-
+friendly compression. In30th USENIX Security Symposium (USENIX Security
+21). 2987–3004.
+[26]Bo Feng, Chentao Wu, and Jie Li. 2016. MLC: an e"cient multi-level log compres-
+sion method for cloud backup systems. In2016 IEEE Trustcom/BigDataSE/ISPA.
+IEEE, 1358–1365.
+[27]Evelyn Fix and Joseph Lawson Hodges. 1989. Discriminatory analysis. Non-
+parametric discrimination: Consistency properties.International Statistical Re-
+view/Revue Internationale de Statistique57, 3 (1989), 238–247.
+[28]Qiang Fu, Jian-Guang Lou, Yi Wang, and Jiang Li. 2009. Execution anomaly
+detection in distributed systems through unstructured log analysis. In2009 ninth
+IEEE international conference on data mining. IEEE, 149–158.
+[29]Wei Fu and Tim Menzies. 2017. Easy over hard: A case study on deep learning. In
+Proceedings of the 2017 11th joint meeting on foundations of software engineering.
+49–60.
+[30]Kimmo Hätönen, Jean François Boulicaut, Mika Klemettinen, Markus Miettinen,
+and Cyrille Masson. 2003. Comprehensive log compression with frequent pat-
+terns. InInternational Conference on Data Warehousing and Knowledge Discovery.
+Springer, 360–370.
+[31]Pinjia He, Jieming Zhu, Zibin Zheng, and Michael R Lyu. 2017. Drain: An online
+log parsing approach with!xed depth tree. In2017 IEEE international conference
+on web services (ICWS). IEEE, 33–40.
+[32]Shilin He, Pinjia He, Zhuangbin Chen, Tianyi Yang, Yuxin Su, and Michael R
+Lyu. 2021. A survey on automated log analysis for reliability engineering.ACM
+Computing Surveys (CSUR)54, 6 (2021), 1–37.
+[33]Shilin He, Jieming Zhu, Pinjia He, and Michael R Lyu. 2016. Experience re-
+port: System log analysis for anomaly detection. In2016 IEEE 27th international
+symposium on software reliability engineering (ISSRE). IEEE, 207–218.
+[34]Guang-Bin Huang, Yan-Qiu Chen, and Haroon A Babri. 2000. Classi!cation
+ability of single hidden layer feedforward neural networks.IEEE transactions on
+neural networks11, 3 (2000), 799–801.
+[35]Zhen Ming Jiang, Ahmed E Hassan, Gilbert Hamann, and Parminder Flora. 2008.
+Automatic identi!cation of load testing problems. In2008 IEEE International
+Conference on Software Maintenance. IEEE, 307–316.
+[36]Suleman Khan, Abdullah Gani, Ainuddin Wahid Abdul Wahab, Mustapha Aminu
+Bagiwa, Muhammad Shiraz, Samee U Khan, Rajkumar Buyya, and Albert Y
+Zomaya. 2016. Cloud log forensics: foundations, state of the art, and future
+directions.ACM Computing Surveys (CSUR)49, 1 (2016), 1–42.
+[37]Zanis Ali Khan, Donghwan Shin, Domenico Bianculli, and Lionel Briand. 2022.
+Guidelines for Assessing the Accuracy of Log Message Template Identi!cation
+Techniques. InProceedings of the 44th International Conference on Software Engi-
+neering (ICSE’22). ACM.
+[38]Gregor Kiczales, John Lamping, Anurag Mendhekar, Chris Maeda, Cristina Lopes,
+Jean-Marc Loingtier, and John Irwin. 1997. Aspect-oriented programming. In
+European conference on object-oriented programming. Springer, 220–242.
+[39]Max Landauer, Sebastian Onder, Florian Skopik, and Markus Wurzenberger. 2022.
+Deep Learning for Anomaly Detection in Log Data: A Survey.arXiv preprint
+arXiv:2207.03820(2022).
+[40]Max Landauer, Sebastian Onder, Florian Skopik, and Markus Wurzenberger. 2023.
+Deep learning for anomaly detection in log data: A survey.Machine Learning
+with Applications12 (2023), 100470.
+[41]Max Landauer, Florian Skopik, Markus Wurzenberger, and Andreas Rauber.
+2020. System log clustering approaches for cyber security applications: A survey.
+Computers & Security92 (2020), 101739.
+[42]Van-Hoang Le and Hongyu Zhang. 2021. Log-based anomaly detection with-
+out log parsing. In2021 36th IEEE/ACM International Conference on Automated
+Software Engineering (ASE). IEEE, 492–504.
+[43]Van Hoang Le and Hongyu Zhang. 2022. Log-based Anomaly Detection with
+Deep Learning: How Far Are We?arXiv preprint arXiv:2202.04301(2022).
+[44]Zeyan Li, Junjie Chen, Rui Jiao, Nengwen Zhao, Zhijun Wang, Shuwei Zhang,
+Yanjun Wu, Long Jiang, Leiqin Yan, Zikai Wang, et al.2021. Practical root cause
+localization for microservice systems via trace analysis. In2021 IEEE/ACM 29th
+International Symposium on Quality of Service (IWQOS). IEEE, 1–10.
+[45]Zhenhao Li, Tse-Hsun Peter Chen, Jinqiu Yang, and Weiyi Shang. 2021. Studying
+duplicate logging statements and their relationships with code clones.IEEE
+Transactions on Software Engineering(2021).
+[46]Zhenhao Li, Heng Li, Tse-Hsun Peter Chen, and Weiyi Shang. 2021. Deeplv:
+Suggesting log levels using ordinal based neural networks. In2021 IEEE/ACM
+43rd International Conference on Software Engineering (ICSE). IEEE, 1461–1472.
+[47]Yinglung Liang, Yanyong Zhang, Hui Xiong, and Ramendra Sahoo. 2007. Failure
+prediction in ibm bluegene/l event logs. InSeventh IEEE International Conference
+on Data Mining (ICDM 2007). IEEE, 583–588.
+[48]Qingwei Lin, Hongyu Zhang, Jian-Guang Lou, Yu Zhang, and Xuewei Chen. 2016.
+Log clustering based problem identi!cation for online service systems. InPro-
+ceedings of the 38th International Conference on Software Engineering Companion.
+102–111.
+[49]Fei Tony Liu, Kai Ming Ting, and Zhi-Hua Zhou. 2008. Isolation forest. In2008
+eighth ieee international conference on data mining. IEEE, 413–422.
+[50]Joshua Lockerman, Jose M Faleiro, Juno Kim, Soham Sankaran, Daniel J Abadi,
+James Aspnes, Siddhartha Sen, and Mahesh Balakrishnan. 2018. The{FuzzyLog}:
+A Partially Ordered Shared Log. In13th USENIX Symposium on Operating Systems
+Design and Implementation (OSDI 18). 357–372.
+[51]Jian-Guang Lou, Qiang Fu, Shenqi Yang, Ye Xu, and Jiang Li. 2010. Mining
+invariants from console logs for system problem detection. In2010 USENIX
+Annual Technical Conference (USENIX ATC 10).
+[52]Siyang Lu, Xiang Wei, Yandong Li, and Liqiang Wang. 2018. Detecting anomaly
+in big data system logs using convolutional neural network. In2018 IEEE 16th Intl
+Conf on Dependable, Autonomic and Secure Computing, 16th Intl Conf on Pervasive
+Intelligence and Computing, 4th Intl Conf on Big Data Intelligence and Computing
+and Cyber Science and Technology Congress (DASC/PiCom/DataCom/CyberSciTech).
+IEEE, 151–158.
+[53]Adetokunbo AO Makanju, A Nur Zincir-Heywood, and Evangelos E Milios. 2009.
+Clustering event logs using iterative partitioning. InProceedings of the 15th
+ACM SIGKDD international conference on Knowledge discovery and data mining.
+1255–1264.
+[54]Mika Mäntylä, Martín Varela, and Shayan Hashemi. 2022. Pinpointing anomaly
+events in logs from stability testing–n-grams vs. deep-learning. In2022 IEEE
+International Conference on Software Testing, Veri!cation and Validation Workshops
+(ICSTW). IEEE, 285–292.
+[55]Shahar Maoz and David Harel. 2011. On tracing reactive systems.Software &
+Systems Modeling10, 4 (2011), 447–468.
+[56]Weibin Meng, Ying Liu, Yichen Zhu, Shenglin Zhang, Dan Pei, Yuqing Liu, Yihao
+Chen, Ruizhi Zhang, Shimin Tao, Pei Sun, et al.2019. LogAnomaly: Unsupervised
+detection of sequential and quantitative anomalies in unstructured logs.. InIJCAI,
+Vol. 19. 4739–4745.
+
+=== PAGE 13 ===
+Deep Learning or Classical Machine Learning? An Empirical Study on Log-Based Anomaly Detection ICSE ’24, April 14–20, 2024, Lisbon, Portugal
+[57]Tim Menzies, Suvodeep Majumder, Nikhila Balaji, Katie Brey, and Wei Fu. 2018.
+500+ times faster than deep learning:(a case study exploring faster methods for
+text mining stackover$ow). In2018 IEEE/ACM 15th International Conference on
+Mining Software Repositories (MSR). IEEE, 554–563.
+[58]Salma Messaoudi, Annibale Panichella, Domenico Bianculli, Lionel Briand, and
+Raimondas Sasnauskas. 2018. A search-based approach for accurate identi!ca-
+tion of log message formats. In2018 IEEE/ACM 26th International Conference on
+Program Comprehension (ICPC). IEEE, 167–16710.
+[59]Salma Messaoudi, Donghwan Shin, Annibale Panichella, Domenico Bianculli,
+and Lionel C Briand. 2021. Log-based slicing for system-level test cases. In
+Proceedings of the 30th ACM SIGSOFT International Symposium on Software Testing
+and Analysis. 517–528.
+[60]Haibo Mi, Huaimin Wang, Yangfan Zhou, Michael Rung-Tsong Lyu, and Hua
+Cai. 2013. Toward!ne-grained, unsupervised, scalable performance diagnosis
+for production cloud computing systems.IEEE Transactions on Parallel and
+Distributed Systems24, 6 (2013), 1245–1255.
+[61]Meiyappan Nagappan, Kesheng Wu, and Mladen A Vouk. 2009. E"ciently
+extracting operational pro!les from execution logs using su"x arrays. In2009
+20th International Symposium on Software Reliability Engineering. IEEE, 41–50.
+[62]Sasho Nedelkoski, Jasmin Bogatinovski, Alexander Acker, Jorge Cardoso, and
+Odej Kao. 2020. Self-attentive classi!cation-based anomaly detection in unstruc-
+tured logs. In2020 IEEE International Conference on Data Mining (ICDM). IEEE,
+1196–1201.
+[63]Adam Oliner and Jon Stearley. 2007. What supercomputers say: A study of
+!ve system logs. In37th annual IEEE/IFIP international conference on dependable
+systems and networks (DSN’07). IEEE, 575–584.
+[64]Kishore Papineni. 2001. Why inverse document frequency?. InSecond Meeting of
+the North American Chapter of the Association for Computational Linguistics.
+[65]Antonio Pecchia, Marcello Cinque, Gabriella Carrozza, and Domenico Cotroneo.
+2015. Industry practices and event logging: Assessment of a critical software
+development process. In2015 IEEE/ACM 37th IEEE International Conference on
+Software Engineering, Vol. 2. IEEE, 169–178.
+[66]Fabian Pedregosa, Gaël Varoquaux, Alexandre Gramfort, Vincent Michel,
+Bertrand Thirion, Olivier Grisel, Mathieu Blondel, Peter Prettenhofer, Ron Weiss,
+Vincent Dubourg, et al.2011. Scikit-learn: Machine learning in Python.Journal
+of machine learning research12, Oct (2011), 2825–2830.
+[67]Balázs Rácz and András Lukács. 2004. High density compression of log!les. In
+Data Compression Conference, 2004. Proceedings. DCC 2004. IEEE, 557.
+[68]Barbara Russo, Giancarlo Succi, and Witold Pedrycz. 2015. Mining system logs
+to learn error predictors: a case study of a telemetry system.Empirical Software
+Engineering20, 4 (2015), 879–927.
+[69]Gerard Salton and Christopher Buckley. 1988. Term-weighting approaches in
+automatic text retrieval.Information processing & management24, 5 (1988),
+513–523.
+[70]Mike Schuster and Kaisuke Nakajima. 2012. Japanese and korean voice search.
+In2012 IEEE international conference on acoustics, speech and signal processing
+(ICASSP). IEEE, 5149–5152.
+[71]Weiyi Shang, Zhen Ming Jiang, Hadi Hemmati, Brain Adams, Ahmed E Hassan,
+and Patrick Martin. 2013. Assisting developers of big data analytics applications
+when deploying on hadoop clouds. In2013 35th International Conference on
+Software Engineering (ICSE). IEEE, 402–411.
+[72]Jasper Snoek, Hugo Larochelle, and Ryan P Adams. 2012. Practical bayesian
+optimization of machine learning algorithms.Advances in neural information
+processing systems25 (2012).
+[73]StatusCake Team. 2020. The Most Expensive Website Downtime Periods in
+History. https://www.statuscake.com/the-most-expensive-website-downtime-
+periods-in-history/
+[74]UpGuard. 2019. The cost of downtime at the world’s biggest online retailer.
+Retrieved September 1, 2020 from https://www.upguard.com/blog/the-cost-of-
+downtime-at-the-worlds-biggest-online-retailer
+[75]Risto Vaarandi. 2003. A data clustering algorithm for mining patterns from event
+logs. InProceedings of the 3rd IEEE Workshop on IP Operations & Management
+(IPOM 2003)(IEEE Cat. No. 03EX764). Ieee, 119–126.
+[76]Risto Vaarandi and Mauno Pihelgas. 2015. Logcluster-a data clustering and
+pattern mining algorithm for event logs. In2015 11th International conference on
+network and service management (CNSM). IEEE, 1–7.
+[77]Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones,
+Aidan N Gomez,%ukasz Kaiser, and Illia Polosukhin. 2017. Attention is all
+you need.Advances in neural information processing systems30 (2017).
+[78]Zehao Wang, Haoxiang Zhang, Tse-Hsun Chen, and Shaowei Wang. 2021. Would
+you like a quick peek? providing logging support to monitor data processing in
+big data applications. InProceedings of the 29th ACM Joint Meeting on European
+Software Engineering Conference and Symposium on the Foundations of Software
+Engineering. 516–526.
+[79]Yonghui Wu, Mike Schuster, Zhifeng Chen, Quoc V Le, Mohammad Norouzi,
+Wolfgang Macherey, Maxim Krikun, Yuan Cao, Qin Gao, Klaus Macherey, et al.
+2016. Google’s neural machine translation system: Bridging the gap between
+human and machine translation.arXiv preprint arXiv:1609.08144(2016).
+[80]Wei Xu, Ling Huang, Armando Fox, David Patterson, and Michael I. Jordan. 2009.
+Detecting large-scale system problems by mining console logs. InProceedings of
+the ACM SIGOPS 22nd symposium on Operating systems principles. 117–132.
+[81]Lin Yang, Junjie Chen, Zan Wang, Weijing Wang, Jiajun Jiang, Xuyuan Dong,
+and Wenbin Zhang. 2021. Semi-supervised log-based anomaly detection via
+probabilistic label estimation. In2021 IEEE/ACM 43rd International Conference on
+Software Engineering (ICSE). IEEE, 1448–1460.
+[82]Kundi Yao, Mohammed Sayagh, Weiyi Shang, and Ahmed E Hassan. 2021. Im-
+proving State-of-the-art Compression Techniques for Log Management Tools.
+IEEE Transactions on Software Engineering(2021).
+[83]Ding Yuan, Soyeon Park, Peng Huang, Yang Liu, Michael M Lee, Xiaoming
+Tang, Yuanyuan Zhou, and Stefan Savage. 2012. Be conservative: Enhancing
+failure diagnosis with proactive logging. In10th USENIX Symposium on Operating
+Systems Design and Implementation (OSDI 12). 293–306.
+[84]Haonan Zhang, Yiming Tang, Maxime Lamothe, Heng Li, and Weiyi Shang. 2022.
+Studying logging practice in test code.Empirical Software Engineering27, 4
+(2022), 1–45.
+[85]Xu Zhang, Yong Xu, Qingwei Lin, Bo Qiao, Hongyu Zhang, Yingnong Dang,
+Chunyu Xie, Xinsheng Yang, Qian Cheng, Ze Li, et al.2019. Robust log-based
+anomaly detection on unstable log data. InProceedings of the 2019 27th ACM
+Joint Meeting on European Software Engineering Conference and Symposium on
+the Foundations of Software Engineering. 807–817.
+[86]Xu Zhao, Kirk Rodrigues, Yu Luo, Michael Stumm, Ding Yuan, and Yuanyuan
+Zhou. 2017. Log20: Fully automated optimal placement of log printing statements
+under speci!ed overhead threshold. InProceedings of the 26th Symposium on
+Operating Systems Principles. 565–581.
+[87]Xiang Zhou, Xin Peng, Tao Xie, Jun Sun, Chao Ji, Wenhai Li, and Dan Ding. 2018.
+Fault analysis and debugging of microservice systems: Industrial survey, bench-
+mark system, and empirical study.IEEE Transactions on Software Engineering47,
+2 (2018), 243–260.
+[88]Xiang Zhou, Xin Peng, Tao Xie, Jun Sun, Chao Ji, Dewei Liu, Qilin Xiang, and
+Chuan He. 2019. Latent error prediction and fault localization for microservice
+applications by learning from system trace logs. InProceedings of the 2019 27th
+ACM Joint Meeting on European Software Engineering Conference and Symposium
+on the Foundations of Software Engineering. 683–694.
+[89]Jieming Zhu, Shilin He, Jinyang Liu, Pinjia He, Qi Xie, Zibin Zheng, and Michael R
+Lyu. 2019. Tools and benchmarks for automated log parsing. In2019 IEEE/ACM
+41st International Conference on Software Engineering: Software Engineering in
+Practice (ICSE-SEIP). IEEE, 121–130.
