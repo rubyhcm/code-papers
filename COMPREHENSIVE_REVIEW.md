@@ -272,7 +272,7 @@
 |--------|---------|--------|---------|
 | `parse_bgl_logs.py` | Parse BGL with Drain3 | ✅ | High |
 | `analyze_datasets.py` | Generate statistics + plots | ✅ | High |
-| `update_hdfs_version.sh` | HDFS v3→v1 migration | ✅ | Good |
+| `update_hdfs_version.sh` | HDFS v1→v1 migration | ✅ | Good |
 
 **Assessment:** ✅ Functional, documented
 

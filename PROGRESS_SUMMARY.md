@@ -257,7 +257,7 @@ code-papers/
 ## 📝 NOTES
 
 ### Key Decisions
-- 2026-11-26: Changed from HDFS_v3 to HDFS_v1 per requirements
+- 2026-11-26: Changed from HDFS_v1 to HDFS_v1 per requirements
 - All documents updated accordingly
 
 ### Blockers

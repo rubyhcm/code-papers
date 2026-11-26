@@ -15,7 +15,7 @@
 | 1.2 | Literature review (34 papers + BibTeX) | 15:42 | ✅ |
 | 1.3 | Log data characteristics | 15:43 | ✅ |
 | 1.4 | ACM Empirical Standards checklist | 15:44 | ✅ |
-| 1.5 | Update HDFS_v3 → HDFS_v1 | 15:48 | ✅ |
+| 1.5 | Update HDFS_v1 → HDFS_v1 | 15:48 | ✅ |
 | 1.6a | Dataset documentation | 15:50 | ✅ |
 | 1.9 | Research Questions (4 RQs) | 15:55 | ✅ |
 | 1.6b | BGL log parsing (4.7M logs) | 15:58 | ✅ |

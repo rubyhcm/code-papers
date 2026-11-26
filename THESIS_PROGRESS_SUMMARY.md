@@ -149,7 +149,7 @@ This document summarizes the exceptional progress made on the Master's thesis in
 ### Analysis Scripts
 1. `parse_bgl_logs.py` - Drain3 parsing for BGL
 2. `analyze_datasets.py` - Statistics + visualizations
-3. `update_hdfs_version.sh` - HDFS v3→v1 migration
+3. `update_hdfs_version.sh` - HDFS v1→v1 migration
 4. `verify_environment.py` - Environment checks ✨ NEW
 
 ### Configuration
