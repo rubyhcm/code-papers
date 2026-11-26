@@ -1,4 +1,5 @@
 import argparse
+import os
 import numpy as np
 from models.classifiers import MLP
 from models.classifiers import KNN
@@ -34,7 +35,7 @@ x_train_arr, x_test_arr, y_train_arr, y_test_arr = [], [], [], []
 data_len = 5
 
 for i in range(data_len):
-    data = np.load(f"/mnt/ssd1/yjy/log_icse/simple_methods/splited_datasets/hdfs/shuffle_{i}.npz", allow_pickle=True)
+    data = np.load(os.path.join(os.path.dirname(__file__), f"datasets/splited_datasets/hdfs/shuffle_{i}.npz"), allow_pickle=True)
     x_train_arr.append(data["x_train"])
     y_train_arr.append(data["y_train"])
     x_test_arr.append(data["x_test"])

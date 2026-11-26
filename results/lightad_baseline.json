@@ -1,0 +1,43 @@
+{
+  "metadata": {
+    "date": "2026-11-26",
+    "hardware": "macOS Apple Silicon (CPU)",
+    "seed": "default (no fixed seed in LightAD)",
+    "note": "Results averaged over 5 shuffles for HDFS; single run for BGL (KNN only per paper)"
+  },
+  "hdfs_knn": {
+    "precision": 0.9977942387303621,
+    "recall":    0.9973867992347543,
+    "f1":        0.9975902834202754,
+    "specificity": 0.9999337254848057,
+    "balanced_acc": 0.99866026235978,
+    "train_time_s": 0.0726,
+    "inference_time_s": 0.2377
+  },
+  "hdfs_dt": {
+    "precision": 0.9977388572727838,
+    "recall":    0.9984573306202490,
+    "f1":        0.9980976933472154,
+    "specificity": 0.9999319329220422,
+    "balanced_acc": 0.9991946317711455,
+    "train_time_s": 0.8929,
+    "inference_time_s": 0.1112
+  },
+  "hdfs_slfn": {
+    "precision": 0.9961264817765331,
+    "recall":    0.9967437603164571,
+    "f1":        0.9964323454364987,
+    "specificity": 0.9998835778951276,
+    "balanced_acc": 0.9983136691057923,
+    "train_time_s": 5.2494,
+    "inference_time_s": 0.1106
+  },
+  "bgl_knn": {
+    "precision": 0.9946524064171123,
+    "recall":    0.9849955869373345,
+    "f1":        0.9898004434589801,
+    "specificity": 0.9996640311779067,
+    "balanced_acc": 0.9923298090576206,
+    "note": "BGL uses KNN only (semantics match, per paper)"
+  }
+}

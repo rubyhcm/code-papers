@@ -3,3 +3,9 @@ data/raw/hdfs_v1/*
 data/parsed/*.jsonl
 data/parsed/*.json
 # analysis/dataset_statistics.json  # re-enabled: summary file is small (<1KB)
+
+# LightAD preprocessed splits (large binary files)
+LightAD/datasets/splited_datasets/
+LightAD/datasets/original_datasets/
+
+# Symlinks to raw data already ignored

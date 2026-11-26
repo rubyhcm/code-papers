@@ -242,7 +242,11 @@ class load_data:
             total_label_window[:train_size], total_label_window[train_size:]
         if not os.path.exists(self.path):
             os.mkdir(self.path)
-        np.savez(os.path.join(self.path,"unshuffle.npz"),x_train=x_train, x_test=x_test, y_train=y_train, y_test=y_test)
+        np.savez(os.path.join(self.path,"unshuffle.npz"),
+                 x_train=np.array(x_train, dtype=object),
+                 x_test=np.array(x_test, dtype=object),
+                 y_train=np.array(y_train, dtype=object),
+                 y_test=np.array(y_test, dtype=object))
     
 
 
