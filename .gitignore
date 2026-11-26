@@ -2,4 +2,4 @@ data/raw/bgl/*
 data/raw/hdfs_v1/*
 data/parsed/*.jsonl
 data/parsed/*.json
-analysis/dataset_statistics.json
+# analysis/dataset_statistics.json  # re-enabled: summary file is small (<1KB)

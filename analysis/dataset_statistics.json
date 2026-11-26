@@ -1,0 +1,37 @@
+{
+  "generated": "2026-11-26",
+  "note": "Summary statistics (raw data excluded from repo due to size)",
+  "hdfs_v1": {
+    "dataset": "HDFS_v1",
+    "total_logs": 11175629,
+    "total_sessions": 575061,
+    "unique_templates": 29,
+    "anomaly_sessions": 16838,
+    "anomaly_rate_sessions": 0.02928,
+    "log_type": "fault injection",
+    "grouping": "Block ID",
+    "source": "LogHub HDFS_v1"
+  },
+  "bgl": {
+    "dataset": "BGL",
+    "total_logs": 4365033,
+    "unique_templates": 1775,
+    "anomaly_count": 527404,
+    "anomaly_rate": 0.1208,
+    "log_type": "natural errors",
+    "grouping": "time window",
+    "source": "LogHub BGL",
+    "top_10_templates": {
+      "E3": 1706751,
+      "E551": 442966,
+      "E11": 295764,
+      "E292": 267725,
+      "E6": 201206,
+      "E1361": 135092,
+      "E1362": 135092,
+      "E1": 105924,
+      "E501": 84250,
+      "E537": 62484
+    }
+  }
+}
