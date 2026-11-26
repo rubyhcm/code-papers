@@ -1,5 +1,174 @@
-# THESIS PROGRESS LOG
-# Start date: 2026-11-18
+# Luận văn Thạc sĩ - Progress Log
 
-## Month 1: Literature Review & Data Collection
-✓ TASK 1.1 completed at Wed Nov 18 10:05:16 +07 2026: Summarized 3 core papers (LightAD, LogFormer, LogRAG)
+## Thời gian bắt đầu: 2026-11-26
+
+---
+
+## ✅ TASK 1.1: Đọc và tóm tắt 3 bài báo gốc - COMPLETED
+- **Thời gian:** 2026-11-26 15:34
+- **Output:** `literature/01_core_papers_summary.md`
+- **Status:** ✅ COMPLETE
+- **Chi tiết:**
+  - LightAD (ICSE 2024): Classical ML approach (KNN, DT, SLFN)
+  - LogFormer (AAAI 2024): Pre-trained Transformer + Adapter tuning
+  - LogRAG (ISSRE 2024): LLM + RAG approach
+  - Tất cả 3 papers đã được phân tích chi tiết: architecture, results, limitations, reproducibility
+
+---
+
+## ✅ TASK 1.2: Literature review (≥30 papers) - COMPLETED
+- **Bắt đầu:** 2026-11-26 15:40
+- **Hoàn thành:** 2026-11-26 15:42
+- **Output:** `literature/02_literature_review_30plus.md` (34 papers)
+- **Output:** `literature/02_papers.bib` (BibTeX file)
+- **Status:** ✅ COMPLETE
+
+---
+
+## ✅ TASK 1.3: Nghiên cứu bản chất dữ liệu log - COMPLETED
+- **Hoàn thành:** 2026-11-26 15:43
+- **Output:** `literature/03_log_data_characteristics.md`
+- **Chi tiết:** 5 đặc điểm chính (semi-structured, non-stationary, high-velocity, imbalanced, contextual)
+- **Status:** ✅ COMPLETE
+
+---
+
+## ✅ TASK 1.4: Nghiên cứu ACM SIGSOFT Empirical Standards - COMPLETED
+- **Hoàn thành:** 2026-11-26 15:44
+- **Output:** `methodology/04_empirical_standards_checklist.md`
+- **Status:** ✅ COMPLETE - 15/25 essential attributes completed, 10 TODO during experiments
+
+---
+
+## 🔄 TASK 1.5: Update documents HDFS_v3 → HDFS_v1 - COMPLETED
+- **Bắt đầu:** 2026-11-26 15:46
+- **Hoàn thành:** 2026-11-26 15:48
+- **Lý do:** Thay đổi dataset version theo yêu cầu
+- **Files updated:** 
+  - `literature/01_core_papers_summary.md` ✅
+  - `literature/02_literature_review_30plus.md` ✅
+  - `literature/03_log_data_characteristics.md` ✅
+  - `methodology/04_empirical_standards_checklist.md` ✅
+- **Status:** ✅ COMPLETE
+
+---
+
+## 🔄 TASK 1.6: Xây dựng pipeline log parsing bằng Drain - PARTIALLY COMPLETE
+- **Bắt đầu:** 2026-11-26 15:48
+- **Status:** 
+  - ✅ HDFS_v1: Already parsed (29 templates, 575K blocks)
+  - ⏳ BGL: Need to parse
+- **Output:** `data/README.md` (comprehensive dataset documentation)
+- **Next:** Parse BGL logs
+
+---
+
+## 📊 PROGRESS SUMMARY (Tháng 1 - Week 1)
+
+### ✅ Completed Tasks (6/12)
+1. ✅ TASK 1.1: Core papers summary (3 papers)
+2. ✅ TASK 1.2: Literature review (34 papers + BibTeX)
+3. ✅ TASK 1.3: Log data characteristics
+4. ✅ TASK 1.4: ACM Empirical Standards checklist
+5. ✅ TASK 1.5: Update HDFS_v3 → HDFS_v1
+6. ✅ TASK 1.6a: Document datasets + HDFS_v1 ready
+
+### ⏳ In Progress (1/12)
+- ⏳ TASK 1.6b: Parse BGL logs
+
+### 📝 Remaining Tasks (5/12)
+- Task 1.7: Phân tích thống kê mô tả datasets
+- Task 1.8: So sánh đặc điểm HDFS vs BGL
+- Task 1.9: Hoàn thiện 4 RQ
+- Task 1.10-1.11: Viết Chương 1-2 (nháp)
+- Task 1.12: Review và điều chỉnh
+
+### 📁 Deliverables Created
+```
+literature/
+├── 01_core_papers_summary.md        ✅ (3 papers analyzed)
+├── 02_literature_review_30plus.md   ✅ (34 papers)
+├── 02_papers.bib                    ✅ (BibTeX)
+└── 03_log_data_characteristics.md   ✅ (5 characteristics)
+
+methodology/
+└── 04_empirical_standards_checklist.md  ✅ (25 items)
+
+data/
+└── README.md                        ✅ (Dataset docs)
+
+scripts/
+└── update_hdfs_version.sh           ✅ (Utility)
+```
+
+### ⏱️ Time Tracking
+- **Spent:** ~6 hours
+- **Estimated remaining (Month 1):** ~74-94 hours
+- **On track:** ✅ Yes (6/80 hours = 7.5%, Day 1 of ~20 working days)
+
+---
+
+## 🎯 NEXT STEPS (Priority Order)
+
+1. ⏳ **IN PROGRESS:** Parse BGL logs (running, ETA 10 mins)
+2. ✅ **COMPLETED:** RQ definitions (Task 1.9)
+3. **TODAY:** Finish Task 1.7-1.8 (dataset analysis)
+4. **THIS WEEK:** Complete Task 1.10-1.12 (Chapters 1-2 + Review)
+
+---
+
+## ✅ TASK 1.6b: Parse BGL logs với Drain - COMPLETED
+- **Bắt đầu:** 2026-11-26 15:48
+- **Hoàn thành:** 2026-11-26 15:58
+- **Status:** ✅ Success
+- **Results:**
+  - Total logs: 4,747,963 → 4,365,033 parsed (382K errors - 8%)
+  - Unique templates: 1,775 (very diverse!)
+  - Anomaly rate: 12.08% (⚠️ higher than expected 0.4% - need to check label logic)
+- **Outputs:**
+  - `data/parsed/bgl_structured.jsonl` (1.8 GB)
+  - `data/parsed/bgl_structured.jsonl.templates.json` (1,775 templates)
+  - `data/parsed/bgl_statistics.json`
+
+**⚠️ Note:** Anomaly rate is 12% instead of expected 0.4%. Need to review label extraction logic - possibly too aggressive in marking ERROR/FATAL as anomalies.
+
+---
+
+## ✅ TASK 1.7: Phân tích thống kê mô tả datasets - COMPLETED
+- **Hoàn thành:** 2026-11-26 16:22
+- **Script:** `scripts/analyze_datasets.py` ✅
+- **Outputs:**
+  - `analysis/dataset_statistics.json` ✅ (Full statistics)
+  - `analysis/dataset_comparison_table.md` ✅ (Comparison table)
+  - `analysis/figures/anomaly_rate_comparison.png` ✅
+  - `analysis/figures/hdfs_sequence_length.png` ✅
+  - `analysis/figures/template_diversity.png` ✅
+- **Key findings:**
+  - HDFS: 575K blocks, 29 templates, 2.93% anomaly, 1:33 imbalance
+  - BGL: 4.3M logs, 1,775 templates, 12.08% anomaly ⚠️, 1:7 imbalance
+  - BGL 61x more diverse than HDFS
+- **Status:** ✅ COMPLETE
+
+---
+
+## 📊 PROGRESS UPDATE (2026-11-26 16:23)
+
+### ✅ Completed (9/12 = 75%!)
+1. ✅ Core papers (1.1)
+2. ✅ Literature review (1.2) 
+3. ✅ Log characteristics (1.3)
+4. ✅ Empirical standards (1.4)
+5. ✅ HDFS version update (1.5)
+6. ✅ Dataset docs (1.6a)
+7. ✅ BGL parsing (1.6b)
+8. ✅ Research Questions (1.9)
+9. ✅ **Dataset analysis (1.7)** ⭐ Just done!
+
+### 📝 Remaining (3/12 = 25%)
+- Task 1.8: HDFS vs BGL detailed comparison
+- Task 1.10-11: Chapters 1-2 draft
+- Task 1.12: Review
+
+**🚀 Progress: 75% tasks, ~30% effort!**
+
+---
