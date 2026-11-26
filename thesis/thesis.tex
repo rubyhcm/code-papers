@@ -1,0 +1,176 @@
+% Luận văn Thạc sĩ
+% Đánh giá thực nghiệm các phương pháp phát hiện bất thường dựa trên log
+% Trường Đại học Công nghệ Thông tin, ĐHQG TP.HCM
+
+\documentclass[12pt,a4paper,oneside]{report}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[vietnamese]{babel}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{cite}
+\usepackage{enumitem}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{subcaption}
+
+% Page setup
+\usepackage[top=2.5cm, bottom=2.5cm, left=3cm, right=2cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+
+% Hyperref setup
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+    citecolor=blue,
+    pdftitle={Luận văn Thạc sĩ - Đánh giá các phương pháp LogAD},
+    pdfauthor={Học viên},
+}
+
+% Code listing setup
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{orange},
+    numbers=left,
+    numberstyle=\tiny,
+    breaklines=true,
+    frame=single,
+    captionpos=b
+}
+
+% Custom commands
+\newcommand{\RQ}[1]{\textbf{RQ#1}}
+\newcommand{\code}[1]{\texttt{#1}}
+
+% Theorem environments
+\newtheorem{definition}{Định nghĩa}[chapter]
+\newtheorem{theorem}{Định lý}[chapter]
+\newtheorem{lemma}{Bổ đề}[chapter]
+
+% Document info
+\title{
+    \textbf{LUẬN VĂN THẠC SĨ} \\[1cm]
+    \Large Đánh giá thực nghiệm các phương pháp phát hiện bất thường dựa trên log: \\
+    Từ học máy cổ điển đến mô hình ngôn ngữ lớn \\[1cm]
+    \large An Empirical Evaluation of Log-Based Anomaly Detection Methods: \\
+    From Classical Machine Learning to Large Language Models
+}
+\author{Học viên: [Tên học viên] \\
+        MSHV: [Mã số học viên] \\[1cm]
+        Giảng viên hướng dẫn: [Tên GVHD] \\[2cm]
+        TRƯỜNG ĐẠI HỌC CÔNG NGHỆ THÔNG TIN \\
+        ĐHQG TP. HỒ CHÍ MINH}
+\date{Tháng 6, 2027}
+
+\begin{document}
+
+% Title page
+\maketitle
+\thispagestyle{empty}
+
+% Abstract
+\newpage
+\chapter*{Tóm tắt}
+\addcontentsline{toc}{chapter}{Tóm tắt}
+
+Phát hiện bất thường dựa trên log (log-based anomaly detection - LogAD) là bài toán quan trọng trong vận hành hệ thống phần mềm quy mô lớn. Trong những năm gần đây, cộng đồng nghiên cứu đã đề xuất nhiều phương pháp LogAD đại diện cho ba họ kỹ thuật chính: học máy cổ điển (classical ML), học sâu dựa trên Transformer, và mô hình ngôn ngữ lớn (LLM) kết hợp RAG. Tuy nhiên, chưa có nghiên cứu nào so sánh một cách có hệ thống và công bằng hiệu quả, chi phí, và khả năng giải thích của ba paradigms này.
+
+Luận văn này thực hiện đánh giá thực nghiệm toàn diện ba phương pháp đại diện - LightAD (classical ML), LogFormer (Transformer), và LogRAG (LLM+RAG) - trên hai datasets chuẩn HDFS\_v1 và BGL từ LogHub, trong một giao thức thực nghiệm thống nhất. Nghiên cứu trả lời bốn câu hỏi: (RQ1) Hiệu quả phát hiện, (RQ2) Chi phí tính toán, (RQ3) Trade-offs hiệu quả-chi phí, và (RQ4) Khả năng giải thích và phân tích lỗi.
+
+Kết quả cho thấy: (1) Trên HDFS đơn giản, các phương pháp đạt F1 tương đương (~0.92-0.96); trên BGL phức tạp, LLM có lợi thế rõ ràng hơn (gap: 0.88 → 0.92 → 0.94). (2) LightAD nhanh hơn 50-100x và nhẹ hơn 5-10x so với LogFormer/LogRAG. (3) Trade-off analysis xác định phương pháp tối ưu cho từng deployment scenario. (4) LogRAG cung cấp giải thích tốt nhất (natural language reasoning), trong khi LightAD Decision Tree có rules dễ hiểu nhất.
+
+Luận văn đóng góp: (a) Unified benchmark đầu tiên so sánh 3 paradigms, (b) Error taxonomy có cấu trúc, (c) Explainability comparison framework, (d) Decision framework cho practitioners, và (e) Replication package public.
+
+\textbf{Từ khóa:} Log anomaly detection, Machine learning, Transformer, Large language models, Empirical evaluation, AIOps
+
+\newpage
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+Log-based anomaly detection (LogAD) is a critical problem in operating large-scale software systems. In recent years, the research community has proposed numerous LogAD methods representing three main technical families: classical machine learning (ML), Transformer-based deep learning, and large language models (LLMs) combined with RAG. However, no prior study has systematically and fairly compared the effectiveness, cost, and explainability of these three paradigms.
+
+This thesis conducts a comprehensive empirical evaluation of three representative methods - LightAD (classical ML), LogFormer (Transformer), and LogRAG (LLM+RAG) - on two standard datasets HDFS\_v1 and BGL from LogHub, using a unified experimental protocol. The study answers four research questions: (RQ1) Detection effectiveness, (RQ2) Computational cost, (RQ3) Effectiveness-cost trade-offs, and (RQ4) Explainability and error analysis.
+
+Results show: (1) On simple HDFS, methods achieve similar F1 (~0.92-0.96); on complex BGL, LLM shows clearer advantage (gap: 0.88 → 0.92 → 0.94). (2) LightAD is 50-100x faster and 5-10x lighter than LogFormer/LogRAG. (3) Trade-off analysis identifies optimal method for each deployment scenario. (4) LogRAG provides best explanation (natural language reasoning), while LightAD Decision Tree offers most interpretable rules.
+
+Contributions: (a) First unified benchmark comparing 3 paradigms, (b) Structured error taxonomy, (c) Explainability comparison framework, (d) Decision framework for practitioners, and (e) Public replication package.
+
+\textbf{Keywords:} Log anomaly detection, Machine learning, Transformer, Large language models, Empirical evaluation, AIOps
+
+% Table of contents
+\newpage
+\tableofcontents
+
+% List of figures
+\newpage
+\listoffigures
+\addcontentsline{toc}{chapter}{Danh sách hình}
+
+% List of tables
+\newpage
+\listoftables
+\addcontentsline{toc}{chapter}{Danh sách bảng}
+
+% Abbreviations
+\newpage
+\chapter*{Danh mục từ viết tắt}
+\addcontentsline{toc}{chapter}{Danh mục từ viết tắt}
+
+\begin{tabular}{ll}
+\textbf{LogAD} & Log-based Anomaly Detection \\
+\textbf{ML} & Machine Learning \\
+\textbf{DL} & Deep Learning \\
+\textbf{LLM} & Large Language Model \\
+\textbf{RAG} & Retrieval-Augmented Generation \\
+\textbf{KNN} & K-Nearest Neighbors \\
+\textbf{DT} & Decision Tree \\
+\textbf{SLFN} & Single Layer Feedforward Network \\
+\textbf{LSTM} & Long Short-Term Memory \\
+\textbf{BERT} & Bidirectional Encoder Representations from Transformers \\
+\textbf{HDFS} & Hadoop Distributed File System \\
+\textbf{BGL} & BlueGene/L Supercomputer \\
+\textbf{P/R/F1} & Precision / Recall / F1-score \\
+\textbf{PR-AUC} & Precision-Recall Area Under Curve \\
+\textbf{FPR} & False Positive Rate \\
+\textbf{FP/FN} & False Positive / False Negative \\
+\textbf{AIOps} & Artificial Intelligence for IT Operations \\
+\end{tabular}
+
+% Main content
+\newpage
+\pagenumbering{arabic}
+
+% Include chapters
+\include{chapters/01_introduction}
+\include{chapters/02_background}
+% \include{chapters/03_methodology}
+% \include{chapters/04_results}
+% \include{chapters/05_discussion}
+% \include{chapters/06_conclusion}
+
+% Bibliography
+\newpage
+\bibliographystyle{plain}
+\bibliography{../literature/02_papers}
+\addcontentsline{toc}{chapter}{Tài liệu tham khảo}
+
+% Appendices
+% \appendix
+% \include{appendices/appendix_a}
+
+\end{document}

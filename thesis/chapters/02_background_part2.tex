@@ -1,0 +1,450 @@
+% ============================================
+% CHAPTER 2 - PART 2: Phát hiện bất thường
+% ============================================
+% Tiếp tục từ section 2.3 (đã có 2.1-2.2)
+% Task 2.5: Viết các section về anomaly detection methods
+
+\section{Phát hiện bất thường trên dữ liệu log}
+\label{sec:anomaly-detection}
+
+\subsection{Định nghĩa và phân loại bất thường}
+\label{subsec:anomaly-definition}
+
+Trong bối cảnh phát hiện bất thường trên log hệ thống, cần phân biệt ba khái niệm thường bị nhầm lẫn: \textit{Anomaly} (bất thường), \textit{Fault} (lỗi), và \textit{Failure} (hư hỏng) \cite{chandola2009anomaly}.
+
+\begin{itemize}
+    \item \textbf{Anomaly (Bất thường):} Sự chênh lệch so với hành vi mong đợi, quan điểm từ dữ liệu.
+    \item \textbf{Fault (Lỗi):} Nguyên nhân gốc rễ của vấn đề, quan điểm từ hệ thống.
+    \item \textbf{Failure (Hư hỏng):} Sự cố có thể quan sát được, quan điểm từ người dùng.
+\end{itemize}
+
+\textbf{Ví dụ minh họa:} Một \textit{fault} (memory leak trong service X) có thể tạo ra \textit{anomaly} (tần suất log "OutOfMemory" tăng cao), cuối cùng dẫn đến \textit{failure} (service crash, người dùng thấy lỗi 503).
+
+Phát hiện bất thường trên log (LogAD) tập trung vào việc phát hiện \textit{anomaly} như một \textit{proxy} để dự đoán \textit{fault} trước khi chúng gây ra \textit{failure}.
+
+\subsubsection{Các loại bất thường}
+
+Theo Chandola et al. \cite{chandola2009anomaly}, bất thường được phân loại thành ba loại:
+
+\paragraph{Point Anomaly:} Một sự kiện đơn lẻ bất thường.
+
+\textbf{Ví dụ:} Một dòng log chưa từng xuất hiện trong quá trình training:
+\begin{verbatim}
+Normal:   INFO: Request processed in 20ms
+Normal:   INFO: Request processed in 25ms
+Anomaly:  FATAL: Segmentation fault at address 0x0000
+Normal:   INFO: Request processed in 22ms
+\end{verbatim}
+
+\paragraph{Collective Anomaly (Sequential Anomaly):} Một chuỗi sự kiện bất thường khi xét tổng thể, dù các sự kiện đơn lẻ có thể bình thường.
+
+\textbf{Ví dụ:} Chuỗi bình thường là A→B→C, nhưng chuỗi A→C→B là bất thường (bỏ qua authentication).
+
+\begin{table}[ht]
+\centering
+\caption{So sánh các loại bất thường}
+\label{tab:anomaly-types}
+\begin{tabular}{lccl}
+\hline
+\textbf{Loại} & \textbf{Sự kiện đơn} & \textbf{Chuỗi} & \textbf{Phương pháp phát hiện} \\
+\hline
+Point & Bất thường & N/A & Frequency-based, Outlier detection \\
+Collective & Bình thường & Bất thường & Sequence modeling (LSTM, Transformer) \\
+Contextual & Phụ thuộc & Phụ thuộc & Conditional models \\
+\hline
+\end{tabular}
+\end{table}
+
+\paragraph{Contextual Anomaly:} Một sự kiện chỉ bất thường trong ngữ cảnh cụ thể.
+
+\textbf{Ví dụ:} 10,000 login requests là bình thường vào giờ hành chính (9h-18h), nhưng bất thường vào lúc nửa đêm (có thể là tấn công).
+
+\textbf{Phạm vi nghiên cứu:} Luận văn này tập trung vào \textit{Collective Anomaly} vì đây là loại phổ biến nhất trong log hệ thống \cite{he2020loghub}.
+
+\subsection{Các hướng tiếp cận theo mức độ giám sát}
+\label{subsec:supervision-approaches}
+
+\subsubsection{Supervised Learning (Học có giám sát)}
+
+Huấn luyện trên dữ liệu đã gán nhãn (cả normal và anomaly).
+
+\textbf{Ưu điểm:}
+\begin{itemize}
+    \item Độ chính xác cao nếu nhãn chính xác
+    \item Có thể học decision boundary phức tạp
+\end{itemize}
+
+\textbf{Nhược điểm:}
+\begin{itemize}
+    \item Yêu cầu dataset lớn có nhãn (tốn kém!)
+    \item Không phát hiện được anomaly mới (chưa thấy trong training)
+\end{itemize}
+
+\textbf{Trong nghiên cứu này:} LightAD (Decision Tree, SLFN)
+
+\subsubsection{Semi-Supervised Learning (Học bán giám sát)}
+
+Huấn luyện chủ yếu trên dữ liệu normal, có ít hoặc không có anomaly.
+
+\textbf{Approaches:}
+\begin{enumerate}
+    \item \textit{One-class classification:} Học boundary xung quanh normal data (DeepSVDD)
+    \item \textit{Few-shot learning:} Sử dụng vài mẫu anomaly để tinh chỉnh
+\end{enumerate}
+
+\textbf{Ưu điểm:}
+\begin{itemize}
+    \item Thực tế: Dữ liệu normal dồi dào, anomaly hiếm
+    \item Có thể phát hiện novel anomaly (chưa thấy trong training)
+\end{itemize}
+
+\textbf{Nhược điểm:}
+\begin{itemize}
+    \item False positive rate cao hơn supervised
+    \item Giả định training data "sạch" (không có hidden anomaly)
+\end{itemize}
+
+\textbf{Trong nghiên cứu này:} LogFormer (pre-train unsupervised + tune supervised), LogRAG (DeepSVDD + RAG)
+
+\subsubsection{Unsupervised Learning (Học không giám sát)}
+
+Không có nhãn; phát hiện anomaly dựa trên sự chênh lệch so với phân phối dữ liệu.
+
+\textbf{Approaches:}
+\begin{itemize}
+    \item Clustering: Anomaly xa cluster center
+    \item Density estimation: Anomaly có xác suất thấp
+    \item Reconstruction: Anomaly có reconstruction error cao (Autoencoder)
+\end{itemize}
+
+\textbf{Ưu điểm:}
+\begin{itemize}
+    \item Không tốn chi phí gán nhãn
+    \item Có thể khám phá anomaly type chưa biết
+\end{itemize}
+
+\textbf{Nhược điểm:}
+\begin{itemize}
+    \item False positive rate cao nhất
+    \item Khó đánh giá nếu không có labeled test set
+\end{itemize}
+
+\textbf{Trong nghiên cứu này:} LightAD-KNN (có thể chạy unsupervised)
+
+\begin{table}[ht]
+\centering
+\caption{So sánh các hướng tiếp cận theo mức độ giám sát}
+\label{tab:supervision-comparison}
+\begin{tabular}{lllll}
+\hline
+\textbf{Approach} & \textbf{Training Data} & \textbf{Ưu điểm} & \textbf{Nhược điểm} & \textbf{Use Case} \\
+\hline
+Supervised & Labeled (N+A) & High accuracy & Expensive labels & Known types \\
+Semi-sup & Mostly normal & Detects novel & Higher FP & Rare anomalies \\
+Unsupervised & Unlabeled & No label cost & Highest FP & Exploratory \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Các họ phương pháp}
+\label{subsec:method-families}
+
+\subsubsection{Classical Machine Learning}
+
+\paragraph{Distance-Based Methods}
+
+\textbf{K-Nearest Neighbors (KNN):} Phân loại anomaly dựa trên khoảng cách đến k láng giềng gần nhất.
+
+\textbf{Thuật toán:}
+\begin{enumerate}
+    \item Cho một test sample $x$, tìm $k$ nearest neighbors trong training set
+    \item Tính average distance $d_{avg}$
+    \item Nếu $d_{avg} > \theta$ (threshold), classify as anomaly
+\end{enumerate}
+
+\textbf{Complexity:} $O(n^2)$ cho inference (brute-force), có thể giảm xuống $O(n \log n)$ với tree-based index.
+
+\textbf{Ưu điểm:}
+\begin{itemize}
+    \item Đơn giản, interpretable (show nearest neighbors)
+    \item Không cần training (instance-based learning)
+    \item Hiệu quả với point anomaly
+\end{itemize}
+
+\textbf{Nhược điểm:}
+\begin{itemize}
+    \item Chi phí inference cao (cần tính distance với tất cả training samples)
+    \item Nhạy cảm với feature scaling
+    \item Curse of dimensionality (hiệu suất giảm trong không gian cao chiều)
+\end{itemize}
+
+\textbf{Trong nghiên cứu này:} LightAD-KNN
+
+\paragraph{Tree-Based Methods}
+
+\textbf{Decision Tree (DT):} Học các if-then rules để phân loại.
+
+\textbf{Example rule:}
+\begin{verbatim}
+IF event_frequency("ERROR") > 10 AND 
+   event_frequency("Timeout") > 5 
+THEN anomaly = True
+\end{verbatim}
+
+\textbf{Complexity:} $O(n \log n)$ training, $O(\log n)$ inference (tree depth).
+
+\textbf{Ưu điểm:}
+\begin{itemize}
+    \item \textbf{Highly interpretable} - có thể visualize cây quyết định
+    \item Xử lý được mixed data types (categorical + numerical)
+    \item Không cần feature scaling
+    \item Inference rất nhanh
+\end{itemize}
+
+\textbf{Nhược điểm:}
+\begin{itemize}
+    \item Dễ overfit (single tree)
+    \item Có thể không capture được complex patterns
+\end{itemize}
+
+\textbf{Trong nghiên cứu này:} LightAD-DT
+
+\paragraph{Shallow Neural Networks}
+
+\textbf{Single-Layer Feedforward Network (SLFN):} Neural network với một hidden layer duy nhất.
+
+\textbf{Architecture:}
+\[
+\text{Input} \xrightarrow{W_1} \text{Hidden (ReLU)} \xrightarrow{W_2} \text{Output (Sigmoid)}
+\]
+
+\textbf{Complexity:} $O(n \cdot d \cdot h)$ với $d$ = input dim, $h$ = hidden units.
+
+\textbf{Ưu điểm:}
+\begin{itemize}
+    \item Training nhanh hơn deep learning
+    \item Có thể học non-linear boundaries
+    \item Chi phí thấp
+\end{itemize}
+
+\textbf{Nhược điểm:}
+\begin{itemize}
+    \item Khả năng biểu diễn hạn chế (shallow)
+    \item Ít interpretable hơn decision tree
+    \item Có thể underfit với complex patterns
+\end{itemize}
+
+\textbf{Trong nghiên cứu này:} LightAD-SLFN
+
+\subsubsection{Deep Learning}
+
+\paragraph{Recurrent Networks (LSTM)}
+
+\textbf{Core Idea:} Mô hình hóa temporal dependencies trong chuỗi log event.
+
+\textbf{Approach:}
+\begin{enumerate}
+    \item Parse logs thành event sequences: $[e_1, e_2, ..., e_n]$
+    \item Train LSTM để predict next event: $P(e_{t+1} | e_1, ..., e_t)$
+    \item Anomaly: Next event không được dự đoán (probability thấp)
+\end{enumerate}
+
+\textbf{Key Papers:}
+\begin{itemize}
+    \item \textbf{DeepLog} \cite{du2017deeplog}: Đầu tiên áp dụng LSTM cho LogAD
+    \item \textbf{LogAnomaly} \cite{meng2019loganomaly}: Kết hợp semantic + quantitative features
+    \item \textbf{LogRobust} \cite{zhang2019logrobust}: Robust với unstable log data
+\end{itemize}
+
+\textbf{Ưu điểm:}
+\begin{itemize}
+    \item Capture temporal dependencies
+    \item Hiệu quả với collective anomaly
+    \item Xử lý variable-length sequences
+\end{itemize}
+
+\textbf{Nhược điểm:}
+\begin{itemize}
+    \item Training chậm (sequential)
+    \item Vanishing gradient với long sequences
+    \item Yêu cầu large training data
+\end{itemize}
+
+\paragraph{Transformer-Based Methods}
+
+\textbf{Core Idea:} Sử dụng self-attention để capture long-range dependencies.
+
+\textbf{LogFormer} \cite{guo2024logformer} (AAAI 2024) - \textit{Trong nghiên cứu này}:
+
+\textbf{Architecture:}
+\begin{enumerate}
+    \item \textbf{Phase 1: Pre-training}
+    \begin{itemize}
+        \item Input: Unlabeled log sequences (100M logs từ BigLog corpus)
+        \item Task: Masked Language Modeling (MLM)
+        \item Output: Pre-trained Transformer
+    \end{itemize}
+    
+    \item \textbf{Phase 2: Adapter Tuning}
+    \begin{itemize}
+        \item Input: Labeled log sequences (HDFS, BGL)
+        \item Task: Binary classification (normal/anomaly)
+        \item Method: Chỉ update adapter layers (1-5\% params)
+        \item Output: Fine-tuned model for LogAD
+    \end{itemize}
+\end{enumerate}
+
+\textbf{Ưu điểm:}
+\begin{itemize}
+    \item \textbf{Parallel training} - nhanh hơn LSTM
+    \item \textbf{Long-range dependencies} - attention mechanism
+    \item \textbf{Pre-training} - tận dụng unlabeled data
+    \item \textbf{Parameter-efficient} - adapter tuning chỉ update 1-5\% tham số
+\end{itemize}
+
+\textbf{Nhược điểm:}
+\begin{itemize}
+    \item High GPU memory (self-attention là $O(n^2)$)
+    \item Yêu cầu large corpus cho pre-training
+    \item Ít interpretable (attention weights cần ML expertise)
+\end{itemize}
+
+\subsubsection{Large Language Models}
+
+\paragraph{RAG-Based Methods}
+
+\textbf{LogRAG} \cite{jiang2024lograg} (ISSRE 2024) - \textit{Trong nghiên cứu này}:
+
+\textbf{Core Idea:} Kết hợp anomaly detection (DeepSVDD) với LLM reasoning (GPT-3.5/4) thông qua Retrieval-Augmented Generation.
+
+\textbf{Architecture:}
+\begin{enumerate}
+    \item \textbf{Phase 1: DeepSVDD Anomaly Detection}
+    \begin{itemize}
+        \item Train one-class neural network trên normal logs
+        \item Học hypersphere boundary xung quanh normal data
+        \item Output: Anomaly score cho mỗi log session
+    \end{itemize}
+    
+    \item \textbf{Phase 2: Retrieval-Augmented Generation}
+    \begin{itemize}
+        \item Với mỗi candidate anomaly:
+        \begin{enumerate}
+            \item Retrieve top-k similar log sessions (using FAISS index)
+            \item Construct prompt: "Given examples: [Retrieved], is [Test] anomalous?"
+            \item LLM reasoning: GPT-3.5/4 generates explanation
+            \item Final decision: Combine DeepSVDD score + LLM reasoning
+        \end{enumerate}
+    \end{itemize}
+\end{enumerate}
+
+\textbf{Ưu điểm:}
+\begin{itemize}
+    \item \textbf{Explainable:} LLM cung cấp natural language explanation
+    \item \textbf{Few-shot learning:} Retrieve similar examples
+    \item \textbf{Semi-supervised:} DeepSVDD phase sử dụng unlabeled data
+    \item \textbf{Domain knowledge:} LLM có thể reasoning về log semantics
+\end{itemize}
+
+\textbf{Nhược điểm:}
+\begin{itemize}
+    \item \textbf{High cost:} API calls cho mỗi test sample (GPT-3.5: \$0.002/1K tokens)
+    \item \textbf{Latency:} Retrieval + LLM inference chậm (1-10 seconds/sample)
+    \item \textbf{Hallucination risk:} LLM có thể generate plausible nhưng incorrect explanations
+    \item \textbf{Dependency:} Phụ thuộc vào external API (OpenAI)
+\end{itemize}
+
+\subsection{So sánh ba phương pháp trong nghiên cứu}
+\label{subsec:our-methods-comparison}
+
+Bảng \ref{tab:methods-comparison} so sánh chi tiết ba phương pháp được đánh giá trong luận văn này.
+
+\begin{table}[ht]
+\centering
+\caption{So sánh LightAD, LogFormer, và LogRAG}
+\label{tab:methods-comparison}
+\begin{tabular}{llll}
+\hline
+\textbf{Dimension} & \textbf{LightAD} & \textbf{LogFormer} & \textbf{LogRAG} \\
+\hline
+ML Family & Classical & Deep Learning & LLM \\
+Architecture & KNN/DT/SLFN & Transformer & DeepSVDD + RAG \\
+Supervision & Sup/Unsup & Semi-sup & Semi-sup \\
+Training Data & 100K-1M & 10M-100M & 100K-1M \\
+Training Time & Minutes & Hours-Days & Hours \\
+Inference Time & <1ms (DT) & ~100ms & 1-10s \\
+Interpretability & ⭐⭐⭐⭐ (DT) & ⭐⭐ (Attention) & ⭐⭐⭐⭐⭐ (NL) \\
+Accuracy & Good & State-of-art & State-of-art \\
+Cost & Very Low & Medium & High \\
+\hline
+\end{tabular}
+\end{table}
+
+\textbf{Key Insights:}
+\begin{itemize}
+    \item \textbf{LightAD:} Hiệu quả, nhanh, interpretable - phù hợp cho production với latency requirement
+    \item \textbf{LogFormer:} Accuracy cao, tận dụng unlabeled data - phù hợp khi có large log corpus
+    \item \textbf{LogRAG:} Explainability tốt nhất, few-shot - phù hợp khi cần natural language explanation cho SREs
+\end{itemize}
+
+\subsection{Metrics đánh giá}
+\label{subsec:evaluation-metrics}
+
+Do class imbalance cao (95-99\% normal logs), các metrics truyền thống như Accuracy không phù hợp. Chúng tôi sử dụng các metrics sau:
+
+\subsubsection{Precision, Recall, F1-Score}
+
+\begin{align}
+\text{Precision} &= \frac{TP}{TP + FP} \label{eq:precision} \\
+\text{Recall} &= \frac{TP}{TP + FN} \label{eq:recall} \\
+\text{F1-Score} &= \frac{2 \cdot \text{Precision} \cdot \text{Recall}}{\text{Precision} + \text{Recall}} \label{eq:f1}
+\end{align}
+
+Trong đó:
+\begin{itemize}
+    \item $TP$ (True Positive): Anomaly được dự đoán đúng
+    \item $FP$ (False Positive): Normal được dự đoán nhầm là anomaly
+    \item $FN$ (False Negative): Anomaly bị bỏ sót (dự đoán là normal)
+    \item $TN$ (True Negative): Normal được dự đoán đúng
+\end{itemize}
+
+\textbf{F1-Score} là harmonic mean của Precision và Recall, cân bằng giữa hai metrics này.
+
+\subsubsection{PR-AUC (Area Under Precision-Recall Curve)}
+
+Với imbalanced data, PR-AUC phù hợp hơn ROC-AUC \cite{saito2015precision}.
+
+\textbf{Cách tính:}
+\begin{enumerate}
+    \item Vary threshold $\theta$ từ 0 đến 1
+    \item Với mỗi $\theta$, tính Precision và Recall
+    \item Plot PR curve: Recall (x-axis) vs Precision (y-axis)
+    \item PR-AUC = Area under curve
+\end{enumerate}
+
+\textbf{Interpretation:} PR-AUC = 1.0 (perfect), Random classifier ≈ anomaly rate (e.g., 0.03 for 3\% anomaly).
+
+\subsubsection{False Positive Rate (FPR)}
+
+\begin{equation}
+\text{FPR} = \frac{FP}{FP + TN}
+\label{eq:fpr}
+\end{equation}
+
+\textbf{Importance:} Trong production, high FPR gây "alert fatigue" - SREs bỏ qua alerts do quá nhiều false alarms.
+
+\textbf{Target:} FPR < 1\% thường được chấp nhận trong industry.
+
+\subsection{Kết luận}
+\label{subsec:anomaly-conclusion}
+
+Phần này đã trình bày:
+\begin{enumerate}
+    \item Định nghĩa và phân loại bất thường (Point, Collective, Contextual)
+    \item Các hướng tiếp cận theo supervision (Supervised, Semi-supervised, Unsupervised)
+    \item Các họ phương pháp từ Classical ML đến Deep Learning và LLM
+    \item Chi tiết về 3 phương pháp trong nghiên cứu (LightAD, LogFormer, LogRAG)
+    \item Metrics đánh giá phù hợp với class imbalance
+\end{enumerate}
+
+Chương tiếp theo sẽ trình bày phương pháp nghiên cứu chi tiết, bao gồm experimental protocol, research questions, và pipeline thực nghiệm.

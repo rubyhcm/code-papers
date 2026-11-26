@@ -1,0 +1,249 @@
+% Chapter 1: Giới thiệu
+% Luận văn Thạc sĩ - Đánh giá các phương pháp phát hiện bất thường dựa trên log
+
+\chapter{Giới thiệu}
+\label{chap:introduction}
+
+\section{Bối cảnh và động lực}
+\label{sec:motivation}
+
+Trong thời đại chuyển đổi số, các hệ thống phần mềm ngày càng trở nên phức tạp và quan trọng đối với hoạt động kinh doanh. Từ các dịch vụ đám mây (cloud services) đến các hệ thống phân tán quy mô lớn (large-scale distributed systems), việc đảm bảo tính ổn định và tin cậy của hệ thống là yếu tố then chốt. Theo báo cáo của Gartner (2023), chi phí trung bình cho mỗi phút downtime của hệ thống có thể lên đến \$5,600, và con số này còn cao hơn nhiều đối với các dịch vụ quan trọng như tài chính hay y tế \cite{gartner2023}.
+
+\subsection{Vai trò của log trong vận hành hệ thống}
+
+Log hệ thống (system logs) là nguồn dữ liệu quan trọng nhất để giám sát, debug và phân tích hệ thống. Mỗi hệ thống phần mềm đều tự động ghi lại các sự kiện, trạng thái và hoạt động của mình dưới dạng log messages. Ví dụ, một hệ thống như Hadoop Distributed File System (HDFS) có thể sinh ra hàng triệu dòng log mỗi ngày, ghi lại các thông tin như:
+
+\begin{itemize}
+    \item Các thao tác đọc/ghi dữ liệu
+    \item Trạng thái của các node trong cluster
+    \item Các lỗi và cảnh báo (errors and warnings)
+    \item Thời gian thực thi của các tác vụ
+\end{itemize}
+
+Tuy nhiên, khối lượng log khổng lồ này cũng đặt ra thách thức lớn: làm thế nào để từ hàng triệu dòng log, có thể \textbf{tự động phát hiện} những log messages bất thường (anomalous) - những dấu hiệu cảnh báo sớm về các vấn đề tiềm ẩn của hệ thống?
+
+\subsection{Thách thức của phát hiện bất thường dựa trên log}
+
+Phát hiện bất thường dựa trên log (log-based anomaly detection - LogAD) đối mặt với nhiều thách thức kỹ thuật:
+
+\textbf{1. Dữ liệu bán cấu trúc (semi-structured):} Log kết hợp cả phần có cấu trúc (timestamp, log level, component) và phần văn bản tự do (free-text message), gây khó khăn cho việc xử lý tự động.
+
+\textbf{2. Khối lượng lớn và tốc độ cao (high-velocity):} Các hệ thống lớn có thể sinh ra hàng triệu log messages mỗi giây, đòi hỏi các phương pháp phát hiện phải có độ trễ thấp (low-latency) và khả năng mở rộng (scalability).
+
+\textbf{3. Mất cân bằng nghiêm trọng (severe imbalance):} Tỷ lệ log bất thường thường rất thấp (<1\%), tạo ra bài toán phân loại mất cân bằng (imbalanced classification).
+
+\textbf{4. Tiến hóa theo thời gian (non-stationary):} Log patterns thay đổi khi hệ thống được cập nhật, yêu cầu các phương pháp phải robust và có khả năng thích nghi.
+
+\textbf{5. Phụ thuộc ngữ cảnh (contextual):} Một log event có thể là bình thường hoặc bất thường tùy thuộc vào ngữ cảnh (context) xung quanh nó.
+
+\subsection{Sự phát triển của các phương pháp LogAD}
+
+Trong những năm gần đây, cộng đồng nghiên cứu đã đề xuất nhiều phương pháp LogAD, đại diện cho ba họ kỹ thuật chính:
+
+\textbf{Học máy cổ điển (Classical Machine Learning):} Các phương pháp như PCA \cite{xu2009detecting}, Decision Tree, và K-Nearest Neighbors (KNN) \cite{yu2024lightad} sử dụng các kỹ thuật học máy truyền thống với feature engineering thủ công. Các phương pháp này đơn giản, nhanh, và dễ giải thích, nhưng khả năng biểu diễn (representation) bị hạn chế.
+
+\textbf{Học sâu (Deep Learning):} Các phương pháp như DeepLog \cite{du2017deeplog}, LogAnomaly \cite{meng2019loganomaly}, và LogBERT \cite{guo2021logbert} sử dụng các kiến trúc neural network (LSTM, Transformer) để tự động học log patterns. Các phương pháp này đạt độ chính xác cao hơn nhưng tốn kém về tính toán và khó giải thích.
+
+\textbf{Mô hình ngôn ngữ lớn (Large Language Models - LLMs):} Gần đây, các phương pháp như LogRAG \cite{jiang2024lograg} và PLELog \cite{le2023plelog} áp dụng LLM kết hợp với RAG (Retrieval-Augmented Generation) để vừa phát hiện bất thường vừa cung cấp giải thích bằng ngôn ngữ tự nhiên. Tuy nhiên, các phương pháp này tốn kém về chi phí API và độ trễ.
+
+\subsection{Vấn đề nghiên cứu}
+
+Mặc dù có nhiều phương pháp được đề xuất, vẫn còn \textbf{thiếu một so sánh công bằng và toàn diện} giữa ba họ kỹ thuật này. Cụ thể:
+
+\begin{itemize}
+    \item Các nghiên cứu trước đây thường chỉ so sánh trong cùng một họ (ví dụ: LSTM vs Transformer)
+    \item Mỗi paper sử dụng datasets, preprocessing, và evaluation protocols khác nhau, khiến việc so sánh trực tiếp không khả thi
+    \item Các nghiên cứu tập trung vào độ chính xác (accuracy) nhưng bỏ qua các yếu tố thực tế như chi phí tính toán, độ trễ, và khả năng giải thích
+    \item Không có phân tích sâu về các error patterns và failure modes của từng phương pháp
+\end{itemize}
+
+Những khoảng trống này khiến các practitioners (kỹ sư vận hành hệ thống) khó lựa chọn phương pháp phù hợp cho use case cụ thể của mình.
+
+\section{Mục tiêu và phạm vi nghiên cứu}
+\label{sec:objectives}
+
+\subsection{Mục tiêu chính}
+
+Mục tiêu tổng quát của luận văn này là: \textbf{Đánh giá một cách có hệ thống và công bằng hiệu quả phát hiện bất thường, chi phí tính toán, và khả năng giải thích của ba phương pháp LogAD đại diện cho ba họ kỹ thuật chủ đạo (ML cổ điển, Transformer, LLM+RAG), trên hai bộ dữ liệu log chuẩn, trong một giao thức thực nghiệm thống nhất và có thể tái lập.}
+
+Cụ thể, luận văn hướng đến bốn mục tiêu:
+
+\textbf{Mục tiêu 1 - So sánh hiệu quả phát hiện:} Đo lường và so sánh độ chính xác (Precision, Recall, F1-score, PR-AUC, FPR) của ba phương pháp trên hai datasets với cùng một giao thức thực nghiệm (same parser, same split, same hardware).
+
+\textbf{Mục tiêu 2 - Đo lường chi phí tính toán:} Định lượng chi phí triển khai thực tế bao gồm training time, inference latency, memory usage, throughput, và API costs (đối với LLM).
+
+\textbf{Mục tiêu 3 - Phân tích trade-offs:} Xác định Pareto frontier giữa hiệu quả phát hiện và chi phí tính toán, từ đó xây dựng decision framework giúp practitioners lựa chọn phương pháp phù hợp.
+
+\textbf{Mục tiêu 4 - Đánh giá explainability:} Phân loại các error patterns (FP/FN) theo taxonomy có cấu trúc, và so sánh chất lượng giải thích (explanation quality) của từng phương pháp theo các tiêu chí actionability, clarity, và correctness.
+
+\subsection{Phạm vi nghiên cứu}
+
+Để đảm bảo tính khả thi trong khuôn khổ luận văn thạc sĩ (6 tháng), nghiên cứu được giới hạn trong các phạm vi sau:
+
+\textbf{Phương pháp:} Ba phương pháp đại diện cho ba paradigms:
+\begin{itemize}
+    \item \textbf{LightAD} \cite{yu2024lightad}: Classical ML (KNN, Decision Tree, SLFN)
+    \item \textbf{LogFormer} \cite{guo2024logformer}: Pre-trained Transformer với Adapter tuning
+    \item \textbf{LogRAG} \cite{jiang2024lograg}: LLM (GPT-3.5/GPT-4) với RAG
+\end{itemize}
+
+\textbf{Datasets:} Hai datasets public từ LogHub \cite{zhu2023loghub}:
+\begin{itemize}
+    \item \textbf{HDFS\_v1}: 575,061 blocks, 29 templates, 2.93\% anomaly rate (fault injection, session-based)
+    \item \textbf{BGL}: 4,365,033 logs, 1,775 templates, 12.08\% anomaly rate (natural errors, event-based)
+\end{itemize}
+
+Hai datasets này bổ sung (complementary) cho nhau: HDFS đại diện cho log data đơn giản và có cấu trúc, trong khi BGL đại diện cho log data phức tạp và đa dạng.
+
+\textbf{Evaluation metrics:} Precision, Recall, F1-score, PR-AUC (Precision-Recall Area Under Curve), FPR (False Positive Rate), cùng với các metrics chi phí (time, latency, memory).
+
+\textbf{Ngoài phạm vi:}
+\begin{itemize}
+    \item Các phương pháp khác (do giới hạn thời gian)
+    \item Datasets khác ngoài HDFS và BGL
+    \item Real-time streaming logs (chỉ tập trung vào batch processing)
+    \item User study với SREs thực tế (chỉ manual analysis bởi tác giả)
+\end{itemize}
+
+\section{Đóng góp chính}
+\label{sec:contributions}
+
+Luận văn này đóng góp vào cả cộng đồng học thuật và thực tiễn công nghiệp:
+
+\subsection{Đóng góp học thuật}
+
+\textbf{Đóng góp 1 - Unified benchmark đa paradigm:} Đây là nghiên cứu đầu tiên so sánh một cách có hệ thống ba paradigms (Classical ML, Transformer, LLM) cho LogAD trên cùng một giao thức thực nghiệm. Các nghiên cứu trước (như LightAD \cite{yu2024lightad}) chỉ so sánh ML vs DL, chưa có LLM; LogRAG \cite{jiang2024lograg} chỉ test trên 1 dataset.
+
+\textbf{Đóng góp 2 - Error taxonomy có cấu trúc:} Phân loại các error patterns (FP/FN) theo taxonomy 5 categories: unseen template, short sequence, noise, semantic ambiguity, class imbalance. Taxonomy này giúp hiểu rõ failure modes của từng phương pháp.
+
+\textbf{Đóng góp 3 - Explainability comparison framework:} So sánh có hệ thống 5 loại explanation (KNN neighbors, DT rules, SLFN features, Transformer attention, LLM reasoning) theo 3 tiêu chí (actionability, clarity, correctness). Đây là phân tích explainability đầu tiên across paradigms cho LogAD.
+
+\textbf{Đóng góp 4 - Cost-effectiveness analysis:} Định lượng trade-offs giữa F1-score và computational cost (latency, memory, API cost), xây dựng Pareto frontier cho decision making.
+
+\subsection{Đóng góp thực tiễn}
+
+\textbf{Đóng góp 5 - Decision framework:} Cung cấp guideline cụ thể cho practitioners: "Nếu hệ thống của bạn có đặc điểm X, Y, Z → Nên chọn phương pháp A vì lý do P, Q, R."
+
+\textbf{Đóng góp 6 - Replication package:} Public code, scripts, configs, và detailed documentation để cộng đồng có thể tái lập kết quả, mở rộng với datasets/methods mới, hoặc áp dụng vào hệ thống thực tế.
+
+\textbf{Đóng góp 7 - Comprehensive dataset analysis:} Phân tích sâu về đặc điểm của HDFS\_v1 và BGL (template distribution, sequence length, imbalance, etc.) giúp hiểu rõ challenges của LogAD.
+
+\section{Các câu hỏi nghiên cứu}
+\label{sec:research-questions}
+
+Luận văn trả lời bốn câu hỏi nghiên cứu (Research Questions - RQs):
+
+\subsection{RQ1: Hiệu quả phát hiện bất thường}
+
+\textbf{RQ1:} \textit{Ba phương pháp LightAD (KNN, DT, SLFN), LogFormer, và LogRAG đạt hiệu quả phát hiện (Precision, Recall, F1-score, PR-AUC, FPR) như thế nào trên HDFS\_v1 và BGL khi đánh giá theo cùng một giao thức?}
+
+\textbf{Motivation:} Thiết lập baseline so sánh công bằng giữa ba paradigms. Hiểu rõ phương pháp nào đạt accuracy cao nhất và có generalize tốt giữa các datasets không.
+
+\textbf{Expected insights:}
+\begin{itemize}
+    \item Trên HDFS (đơn giản, 29 templates): Các phương pháp có performance gaps nhỏ (F1 $\sim$0.92-0.96)
+    \item Trên BGL (phức tạp, 1,775 templates): LLM/Transformer có advantage rõ rệt hơn (F1 gap: 0.88 → 0.92 → 0.94)
+\end{itemize}
+
+\subsection{RQ2: Chi phí tính toán}
+
+\textbf{RQ2:} \textit{Chi phí tính toán (training time, inference latency, memory usage, throughput, API costs) của các phương pháp là bao nhiêu?}
+
+\textbf{Motivation:} Accuracy không phải là tất cả. Trong production, latency, cost, và resource constraints rất quan trọng.
+
+\textbf{Expected insights:}
+\begin{itemize}
+    \item LightAD: Nhanh nhất (<1ms inference), nhỏ nhất (<500MB memory), free
+    \item LogFormer: Trung bình (~2-5ms inference), 2-4GB memory, cần GPU
+    \item LogRAG: Chậm nhất (~50-100ms inference), API cost \$2-5 per 1K samples
+\end{itemize}
+
+\subsection{RQ3: Đánh đổi hiệu quả-chi phí}
+
+\textbf{RQ3:} \textit{Trade-offs giữa detection effectiveness và computational cost là gì? Phương pháp nào cung cấp balance tốt nhất cho các deployment scenarios khác nhau?}
+
+\textbf{Motivation:} Practitioners cần guidance: "Phương pháp nào cho use case của tôi?"
+
+\textbf{Expected insights:}
+\begin{itemize}
+    \item Real-time systems (latency <1ms) → LightAD (chỉ có method này đáp ứng)
+    \item Batch processing (accuracy critical) → LogRAG hoặc LogFormer
+    \item Resource-constrained (memory <500MB) → LightAD
+    \item Cost-sensitive (low budget) → LightAD hoặc LogFormer (no API cost)
+\end{itemize}
+
+\subsection{RQ4: Khả năng giải thích và phân tích lỗi}
+
+\textbf{RQ4a:} \textit{Các error patterns (False Positives, False Negatives) của các phương pháp là gì? Có thể phân loại chúng theo taxonomy như thế nào?}
+
+\textbf{RQ4b:} \textit{Chất lượng giải thích (explanation quality) của các phương pháp theo các tiêu chí actionability, clarity, và correctness như thế nào?}
+
+\textbf{Motivation:} Hiểu \textit{tại sao} phương pháp fail và \textit{như thế nào} giải thích predictions giúp trust và debugging.
+
+\textbf{Expected insights:}
+\begin{itemize}
+    \item Error taxonomy: Unseen template (BGL nhiều hơn HDFS), short sequence (HDFS), semantic ambiguity (BGL)
+    \item Explainability ranking: LogRAG (natural language) $>$ LightAD-DT (rules) $>$ LightAD-KNN (neighbors) $>$ LogFormer (attention) $>$ LightAD-SLFN (features)
+\end{itemize}
+
+\section{Phương pháp nghiên cứu}
+\label{sec:methodology-overview}
+
+Luận văn áp dụng \textbf{phương pháp thực nghiệm định lượng (quantitative empirical benchmarking)} tuân theo ACM SIGSOFT Empirical Standards \cite{acmsigsoft2022standards}. Quy trình nghiên cứu gồm 5 bước:
+
+\textbf{Bước 1 - Tổng quan tài liệu (Literature Review):} Khảo sát $\geq$30 papers về LogAD (2017-2024), xác định research gaps, chọn 3 phương pháp đại diện.
+
+\textbf{Bước 2 - Chuẩn bị dữ liệu (Data Preparation):} Tải HDFS\_v1 và BGL từ LogHub, parse bằng Drain \cite{he2017drain}, phân tích thống kê mô tả, so sánh đặc điểm.
+
+\textbf{Bước 3 - Tái lập baselines (Baseline Reproduction):} Clone GitHub repos của 3 phương pháp, thiết lập environment thống nhất, tái lập kết quả paper gốc, validate trong ±5\% F1.
+
+\textbf{Bước 4 - Benchmark chính (Main Benchmark):} Chạy 3 methods $\times$ 2 datasets $\times$ 5 seeds, đo P/R/F1/PR-AUC/FPR (RQ1), training time/latency/memory (RQ2), Pareto analysis (RQ3).
+
+\textbf{Bước 5 - Phân tích sâu (Deep Analysis):} Extract 50-100 FP/FN per method, classify theo taxonomy (RQ4a), compare explanation quality (RQ4b), statistical tests (Wilcoxon signed-rank).
+
+\textbf{Fairness controls:}
+\begin{itemize}
+    \item Same hardware: NVIDIA RTX 3090 (24GB VRAM), 32GB RAM
+    \item Same parser: Drain3 với sim\_th=0.4
+    \item Same split: 80/10/10 (train/val/test), stratified, fixed seed=42
+    \item Same metrics: Consistent implementation
+\end{itemize}
+
+Chi tiết đầy đủ được trình bày trong Chương 3 (Phương pháp nghiên cứu).
+
+\section{Cấu trúc luận văn}
+\label{sec:thesis-structure}
+
+Luận văn được tổ chức thành 6 chương:
+
+\textbf{Chương 1 - Giới thiệu:} Bối cảnh, động lực, mục tiêu, phạm vi, đóng góp, các câu hỏi nghiên cứu, và tổng quan phương pháp.
+
+\textbf{Chương 2 - Cơ sở lý thuyết và tổng quan tài liệu:} 
+\begin{itemize}
+    \item Phần 1: Dữ liệu log hệ thống (đặc điểm, log parsing, datasets)
+    \item Phần 2: Phát hiện bất thường trên log (định nghĩa, các hướng tiếp cận, taxonomy)
+    \item Phần 3: Tổng quan 3 phương pháp (LightAD, LogFormer, LogRAG)
+\end{itemize}
+
+\textbf{Chương 3 - Phương pháp nghiên cứu:} Các RQ chi tiết, pipeline thực nghiệm, datasets, baselines, evaluation metrics, kiểm soát công bằng, giao thức tái lập, ACM Empirical Standards compliance.
+
+\textbf{Chương 4 - Kết quả thực nghiệm:} Trả lời RQ1 (effectiveness), RQ2 (cost), RQ3 (trade-offs), RQ4 (explainability + errors), với bảng số liệu, biểu đồ, và statistical tests.
+
+\textbf{Chương 5 - Thảo luận:} Giải thích kết quả, so sánh với literature, decision framework cho practitioners, threats to validity, limitations, lessons learned.
+
+\textbf{Chương 6 - Kết luận và hướng phát triển:} Tóm tắt đóng góp, khuyến nghị, hạn chế, và hướng nghiên cứu tương lai (more methods/datasets, online learning, cross-system generalization, multimodal fusion).
+
+\section{Tóm tắt chương}
+\label{sec:chapter-summary}
+
+Chương này đã trình bày bối cảnh, động lực, và tổng quan về nghiên cứu. Các điểm chính:
+
+\begin{itemize}
+    \item LogAD là bài toán quan trọng nhưng challenging (high-velocity, imbalanced, non-stationary)
+    \item Ba paradigms chính (Classical ML, Transformer, LLM) chưa được so sánh công bằng
+    \item Luận văn thực hiện unified benchmark với 3 methods $\times$ 2 datasets
+    \item Đóng góp: Benchmark, error taxonomy, explainability comparison, decision framework
+    \item 4 RQs: Effectiveness, Cost, Trade-offs, Explainability
+\end{itemize}
+
+Chương tiếp theo (Chương 2) sẽ trình bày cơ sở lý thuyết về dữ liệu log và các phương pháp phát hiện bất thường.

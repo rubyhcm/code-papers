@@ -1,0 +1,104 @@
+# Python Dependencies for Log Anomaly Detection Thesis
+# Generated: 2026-11-26
+# Python 3.8+
+
+# ============================================
+# Core ML/DL Libraries
+# ============================================
+torch==1.13.1
+torchvision==0.14.1
+torchaudio==0.13.1
+
+transformers==4.30.0
+scikit-learn==1.3.0
+
+# ============================================
+# Data Processing
+# ============================================
+pandas==2.0.3
+numpy==1.24.3
+
+# Log parsing
+drain3==0.9.11
+
+# ============================================
+# Visualization
+# ============================================
+matplotlib==3.7.2
+seaborn==0.12.2
+
+# ============================================
+# Utilities
+# ============================================
+pyyaml==6.0.1
+tqdm==4.66.1
+jsonlines==3.1.0
+
+# ============================================
+# System Monitoring (for RQ2)
+# ============================================
+psutil==5.9.5
+nvidia-ml-py3==7.352.0
+
+# ============================================
+# RAG / Vector Search (LogRAG)
+# ============================================
+faiss-cpu==1.7.4  # Use faiss-gpu if GPU available
+openai==0.27.8  # For LogRAG with GPT-3.5/4
+
+# ============================================
+# Testing & Quality
+# ============================================
+pytest==7.4.0
+black==23.7.0
+flake8==6.1.0
+
+# ============================================
+# Jupyter (for analysis notebooks)
+# ============================================
+jupyter==1.0.0
+ipykernel==6.25.0
+
+# ============================================
+# Optional: Local LLM support
+# ============================================
+# sentence-transformers==2.2.2  # For embeddings
+# llama-cpp-python==0.1.78  # For local Mistral-7B
+
+# ============================================
+# LaTeX support (thesis writing)
+# ============================================
+# Note: LaTeX installed separately (TeXLive/MiKTeX)
+# Python support for LaTeX processing:
+latexcodec==2.0.1
+pylatexenc==2.10
+
+# ============================================
+# Installation Notes
+# ============================================
+# 
+# 1. Create environment:
+#    conda create -n logad-bench python=3.8
+#    conda activate logad-bench
+#
+# 2. Install PyTorch with CUDA 11.7:
+#    pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 torchaudio==0.13.1 \
+#        --extra-index-url https://download.pytorch.org/whl/cu117
+#
+# 3. Install other dependencies:
+#    pip install -r requirements.txt
+#
+# 4. Verify installation:
+#    python scripts/verify_environment.py
+#
+# 5. GPU check:
+#    python -c "import torch; print(torch.cuda.is_available())"
+#
+# ============================================
+# System Requirements
+# ============================================
+# - Python 3.8+
+# - CUDA 11.7+ (for GPU)
+# - 32GB RAM recommended
+# - 100GB disk space (for datasets + models)
+# - NVIDIA GPU with 16GB+ VRAM (RTX 3090 or better)

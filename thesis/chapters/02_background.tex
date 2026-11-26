@@ -1,0 +1,608 @@
+% Chapter 2: Cơ sở lý thuyết và tổng quan tài liệu
+% Luận văn Thạc sĩ
+
+\chapter{Cơ sở lý thuyết và tổng quan tài liệu}
+\label{chap:background}
+
+Chương này trình bày các kiến thức nền tảng cần thiết để hiểu rõ bài toán phát hiện bất thường dựa trên log và các phương pháp tiếp cận hiện đại. Chương được chia thành ba phần chính: (1) Dữ liệu log hệ thống và log parsing, (2) Bộ dữ liệu nghiên cứu (HDFS\_v1 và BGL), và (3) Các phương pháp phát hiện bất thường trên log.
+
+\section{Dữ liệu log hệ thống}
+\label{sec:system-logs}
+
+\subsection{Định nghĩa và vai trò}
+
+\textbf{Log hệ thống} (system logs hay event logs) là các bản ghi tự động được sinh ra bởi hệ thống phần mềm trong quá trình vận hành, ghi lại các sự kiện, trạng thái, lỗi, và hoạt động quan trọng của hệ thống \cite{he2021loghub2}. 
+
+Mỗi dòng log thường chứa các thông tin sau:
+
+\begin{itemize}
+    \item \textbf{Timestamp:} Thời điểm sự kiện xảy ra
+    \item \textbf{Log level:} Mức độ quan trọng (DEBUG, INFO, WARNING, ERROR, FATAL)
+    \item \textbf{Component:} Module hoặc service sinh ra log
+    \item \textbf{Message:} Nội dung mô tả sự kiện (văn bản tự do)
+\end{itemize}
+
+\textbf{Ví dụ log line từ HDFS:}
+
+\begin{verbatim}
+081109 203518 148 INFO dfs.DataNode$PacketResponder: 
+Received block blk_-1608999687919862906 of size 67108864 from /10.250.10.6
+\end{verbatim}
+
+Phân tích:
+\begin{itemize}
+    \item Timestamp: \texttt{081109 203518 148} (Nov 09, 2008, 20:35:18.148)
+    \item Level: \texttt{INFO}
+    \item Component: \texttt{dfs.DataNode\$PacketResponder}
+    \item Message: \texttt{Received block ... from ...}
+\end{itemize}
+
+\subsection{Đặc điểm của dữ liệu log}
+
+Dữ liệu log có năm đặc điểm chính tạo nên các thách thức độc đáo cho bài toán phát hiện bất thường:
+
+\subsubsection{Bán cấu trúc (Semi-structured)}
+
+Log kết hợp cả phần có cấu trúc cố định (timestamp, level, component) và phần văn bản tự do (message content). Điều này khiến log khó xử lý hơn so với dữ liệu có cấu trúc hoàn toàn (như database tables) nhưng vẫn có nhiều thông tin hơn so với văn bản thuần túy.
+
+\textbf{Implication:} Cần có bước log parsing để trích xuất cấu trúc từ message content trước khi áp dụng machine learning.
+
+\subsubsection{Phi dừng (Non-stationary)}
+
+Log patterns thay đổi theo thời gian khi hệ thống được cập nhật. Ví dụ:
+
+\begin{itemize}
+    \item Software update thêm hoặc sửa log statements
+    \item New features sinh ra log templates mới
+    \item Deprecated code paths không còn sinh log nữa
+\end{itemize}
+
+\textbf{Implication:} Models cần có khả năng thích nghi (adaptive) hoặc được retrain định kỳ.
+
+\subsubsection{Tốc độ cao (High-velocity)}
+
+Hệ thống lớn có thể sinh ra hàng triệu log messages mỗi giây. Theo báo cáo của He et al. \cite{he2020loganomaly}, các hệ thống production thường có:
+
+\begin{itemize}
+    \item Small applications: 10-100 logs/second
+    \item Microservices: 1K-10K logs/second  
+    \item Cloud platforms: 100K-1M logs/second
+\end{itemize}
+
+\textbf{Implication:} Phương pháp phát hiện cần có độ trễ thấp (low latency) và throughput cao để xử lý real-time.
+
+\subsubsection{Mất cân bằng nghiêm trọng (Severe imbalance)}
+
+Tỷ lệ log bất thường thường rất thấp. Trong nghiên cứu của chúng tôi:
+
+\begin{itemize}
+    \item HDFS\_v1: 2.93\% anomaly (imbalance ratio 1:33)
+    \item BGL: 12.08\% anomaly (imbalance ratio 1:7)
+\end{itemize}
+
+Nhiều datasets khác có tỷ lệ còn thấp hơn (<0.5\%).
+
+\textbf{Implication:} Không thể dùng accuracy làm metric. Cần dùng Precision, Recall, F1, và PR-AUC.
+
+\subsubsection{Phụ thuộc ngữ cảnh (Contextual)}
+
+Một log event có thể là normal hoặc anomalous tùy thuộc vào:
+
+\begin{itemize}
+    \item \textbf{Sequential context:} Thứ tự các events xung quanh
+    \item \textbf{Temporal context:} Thời gian trong ngày (business hours vs nighttime)
+    \item \textbf{Session context:} Thuộc workflow/transaction nào
+\end{itemize}
+
+\textbf{Ví dụ:} Log "Connection timeout" có thể là:
+\begin{itemize}
+    \item Normal: Nếu theo sau là "Retry succeeded"
+    \item Anomalous: Nếu lặp lại 100 lần liên tiếp
+\end{itemize}
+
+\textbf{Implication:} Cần modeling sequences/sessions, không thể xử lý từng log độc lập.
+
+\subsection{Log parsing}
+
+\textbf{Log parsing} là quá trình tách log message thành \textbf{template} (phần cố định) và \textbf{parameters} (phần biến đổi).
+
+\textbf{Ví dụ:}
+
+\begin{verbatim}
+Input (2 log lines):
+  "User alice logged in from 192.168.1.1"
+  "User bob logged in from 10.0.0.5"
+
+Output:
+  Template: "User <*> logged in from <*>"
+  Parameters: ["alice", "192.168.1.1"], ["bob", "10.0.0.5"]
+\end{verbatim}
+
+\subsubsection{Drain algorithm}
+
+Nghiên cứu này sử dụng \textbf{Drain} \cite{he2017drain}, một trong những log parser phổ biến và chính xác nhất hiện nay. Drain hoạt động dựa trên fixed-depth tree:
+
+\textbf{Algorithm outline:}
+\begin{enumerate}
+    \item Tokenize log message thành words
+    \item Group theo log length (số từ)
+    \item Group theo leading tokens
+    \item Tìm cluster tương đồng nhất (similarity threshold)
+    \item Nếu similarity $>$ threshold: Merge vào cluster
+    \item Nếu không: Tạo cluster mới
+\end{enumerate}
+
+\textbf{Hyperparameters:}
+\begin{itemize}
+    \item \textbf{Depth:} 4 (default, works for most datasets)
+    \item \textbf{sim\_th (similarity threshold):} 0.4-0.5
+    \item \textbf{max\_child:} 100
+\end{itemize}
+
+\textbf{Advantages của Drain:}
+\begin{itemize}
+    \item Online: Xử lý streaming logs
+    \item Fast: O(log n) complexity
+    \item Accurate: 95-99\% parsing accuracy trên các benchmarks
+\end{itemize}
+
+\section{Bộ dữ liệu nghiên cứu}
+\label{sec:datasets}
+
+Nghiên cứu sử dụng hai datasets public từ LogHub \cite{zhu2023loghub}: HDFS\_v1 và BGL. Hai datasets này được chọn vì tính bổ sung (complementary): HDFS đại diện cho log data đơn giản và có cấu trúc, trong khi BGL đại diện cho log data phức tạp và đa dạng.
+
+\subsection{HDFS\_v1: Hadoop Distributed File System}
+
+\subsubsection{Nguồn gốc}
+
+HDFS\_v1 được thu thập từ một Hadoop cluster 203 nodes chạy MapReduce workloads trong 38 giờ liên tục (năm 2008). Dataset này được tạo ra bởi Xu et al. \cite{xu2009detecting} trong nghiên cứu tiên phong về log mining.
+
+\subsubsection{Đặc điểm}
+
+\begin{table}[h]
+\centering
+\caption{Thống kê HDFS\_v1 dataset}
+\label{tab:hdfs-stats}
+\begin{tabular}{lr}
+\toprule
+\textbf{Characteristic} & \textbf{Value} \\
+\midrule
+Total log lines & 11,175,629 \\
+Total blocks (sessions) & 575,061 \\
+Unique templates & 29 \\
+Average sequence length & 19.4 events \\
+Normal blocks & 558,223 (97.07\%) \\
+Anomaly blocks & 16,838 (2.93\%) \\
+Imbalance ratio & 1:33 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Labeling strategy}
+
+HDFS\_v1 sử dụng \textbf{fault injection} để tạo anomalies:
+
+\begin{enumerate}
+    \item Chạy healthy workload → Thu thập normal logs
+    \item Inject faults:
+    \begin{itemize}
+        \item Kill DataNode processes
+        \item Corrupt disk blocks
+        \item Network partitions
+        \item Disk full errors
+    \end{itemize}
+    \item Thu thập logs during failures → Label là anomalies
+\end{enumerate}
+
+\textbf{Advantages:}
+\begin{itemize}
+    \item Clean labels (biết chính xác khi nào anomaly xảy ra)
+    \item Reproducible (có thể inject lại cùng faults)
+    \item Controlled (biết failure modes)
+\end{itemize}
+
+\textbf{Disadvantages:}
+\begin{itemize}
+    \item Synthetic (có thể không reflect real production failures)
+    \item Limited diversity (chỉ các failure modes được inject)
+\end{itemize}
+
+\subsubsection{Session grouping}
+
+HDFS logs được nhóm theo \textbf{Block ID}. Mỗi block trong HDFS có một workflow rõ ràng:
+
+\begin{verbatim}
+Block blk_123 workflow:
+  1. Client requests block write
+  2. DataNode receives block
+  3. Write to local disk
+  4. Replicate to other DataNodes (typically 3 copies)
+  5. Send acknowledgment to NameNode
+\end{verbatim}
+
+Tất cả logs liên quan đến cùng một Block ID được nhóm thành một \textbf{session}. Anomaly detection được thực hiện ở mức session (không phải individual log line).
+
+\textbf{Label:} Session là anomalous nếu BẤT KỲ log nào trong session là anomalous.
+
+\subsection{BGL: BlueGene/L Supercomputer}
+
+\subsubsection{Nguồn gốc}
+
+BGL được thu thập từ BlueGene/L supercomputer tại Lawrence Livermore National Lab trong 214 ngày (năm 2005). Supercomputer này có 128K processors và chạy các scientific computing workloads.
+
+\subsubsection{Đặc điểm}
+
+\begin{table}[h]
+\centering
+\caption{Thống kê BGL dataset}
+\label{tab:bgl-stats}
+\begin{tabular}{lr}
+\toprule
+\textbf{Characteristic} & \textbf{Value} \\
+\midrule
+Total log lines & 4,747,963 (raw) \\
+Parsed successfully & 4,365,033 (91.9\%) \\
+Unique templates & 1,775 \\
+Normal logs & 3,837,629 (87.92\%) \\
+Anomaly logs & 527,404 (12.08\%) \\
+Imbalance ratio & 1:7 \\
+Collection period & 214 days \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Labeling strategy}
+
+BGL sử dụng \textbf{natural errors} từ production system. Labels được trích xuất từ log level field:
+
+\begin{itemize}
+    \item \textbf{Anomaly:} FATAL, SEVERE, ERROR
+    \item \textbf{Normal:} WARNING, INFO, DEBUG
+\end{itemize}
+
+\textbf{Advantages:}
+\begin{itemize}
+    \item Realistic (actual production failures)
+    \item Diverse (214 days → nhiều failure modes)
+    \item Unbiased (không có synthetic patterns)
+\end{itemize}
+
+\textbf{Disadvantages:}
+\begin{itemize}
+    \item Noisy labels (log level không hoàn toàn tương đương anomaly)
+    \item Ground truth unclear (không có oracle)
+    \item Higher anomaly rate (12\% vs expected 0.4\% trong literature - có thể do label extraction aggressive)
+\end{itemize}
+
+\subsubsection{Session grouping}
+
+Khác với HDFS, BGL không có natural session ID. Do đó, sử dụng \textbf{time-window based grouping}:
+
+\begin{itemize}
+    \item \textbf{Window size:} 20 seconds (theo DeepLog \cite{du2017deeplog})
+    \item \textbf{Sliding:} 10 seconds overlap (50\%)
+    \item \textbf{Label:} Window là anomalous nếu BẤT KỲ log nào trong window là anomalous
+\end{itemize}
+
+\textbf{Rationale:} 20 seconds là khoảng thời gian đủ dài để capture context nhưng không quá dài để dilute anomaly signal.
+
+\subsection{So sánh HDFS\_v1 vs BGL}
+
+Hai datasets bổ sung cho nhau theo nhiều chiều:
+
+\begin{table}[h]
+\centering
+\caption{So sánh HDFS\_v1 và BGL}
+\label{tab:dataset-comparison}
+\begin{tabular}{lll}
+\toprule
+\textbf{Aspect} & \textbf{HDFS\_v1} & \textbf{BGL} \\
+\midrule
+\textbf{Complexity} & Simple (29 templates) & Complex (1,775) \\
+\textbf{Realism} & Synthetic (injection) & Natural (production) \\
+\textbf{Structure} & Workflow (Block-based) & Event (time-based) \\
+\textbf{Imbalance} & Severe (1:33) & Moderate (1:7) \\
+\textbf{Duration} & Short (38 hours) & Long (214 days) \\
+\textbf{Labeling} & Clean (injected) & Noisy (heuristic) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Complementarity:}
+\begin{itemize}
+    \item HDFS test methods trên simple, structured logs
+    \item BGL test methods trên complex, diverse logs
+    \item Together: Comprehensive coverage của LogAD challenges
+\end{itemize}
+
+\section{Phát hiện bất thường trên log}
+\label{sec:log-anomaly-detection}
+
+\subsection{Định nghĩa bài toán}
+
+\textbf{Log-based Anomaly Detection (LogAD)} là bài toán phân loại (classification): Cho một log session (hoặc window), xác định nó là \textbf{Normal} hay \textbf{Anomaly}.
+
+\textbf{Formal definition:}
+
+\begin{itemize}
+    \item \textbf{Input:} Log session $S = \{e_1, e_2, ..., e_n\}$ với $e_i$ là log events
+    \item \textbf{Output:} Label $y \in \{0, 1\}$ với 0 = Normal, 1 = Anomaly
+    \item \textbf{Goal:} Học function $f: S \rightarrow y$ từ training data
+\end{itemize}
+
+\subsection{Các hướng tiếp cận}
+
+Dựa trên mức độ supervision, LogAD methods được phân loại thành:
+
+\subsubsection{Supervised Learning}
+
+Yêu cầu labeled data (cả normal và anomaly) cho training.
+
+\textbf{Examples:}
+\begin{itemize}
+    \item LightAD Decision Tree, SLFN (khi train với labels)
+    \item LogBERT fine-tuned với labeled data
+\end{itemize}
+
+\textbf{Advantages:}
+\begin{itemize}
+    \item High accuracy (nếu labels chính xác)
+    \item Có thể học specific anomaly patterns
+\end{itemize}
+
+\textbf{Disadvantages:}
+\begin{itemize}
+    \item Yêu cầu nhiều labeled data (expensive)
+    \item Không detect được novel anomaly types chưa thấy trong training
+\end{itemize}
+
+\subsubsection{Semi-supervised Learning}
+
+Train trên mostly normal data với một ít labeled anomalies.
+
+\textbf{Examples:}
+\begin{itemize}
+    \item LogRAG: DeepSVDD train trên normal data, sau đó dùng few-shot LLM
+    \item One-Class SVM
+\end{itemize}
+
+\textbf{Advantages:}
+\begin{itemize}
+    \item Ít labels hơn supervised
+    \item Có thể detect một số novel anomalies
+\end{itemize}
+
+\textbf{Disadvantages:}
+\begin{itemize}
+    \item Vẫn cần một số labeled data
+    \item Performance phụ thuộc vào quality của normal data
+\end{itemize}
+
+\subsubsection{Unsupervised Learning}
+
+Không cần labels, chỉ dựa vào distribution của data.
+
+\textbf{Examples:}
+\begin{itemize}
+    \item LightAD KNN (distance-based)
+    \item PCA-based methods
+    \item Clustering-based methods
+\end{itemize}
+
+\textbf{Advantages:}
+\begin{itemize}
+    \item Không cần labels (practical)
+    \item Có thể detect novel anomalies
+\end{itemize}
+
+\textbf{Disadvantages:}
+\begin{itemize}
+    \item Lower accuracy
+    \item Khó tune threshold
+    \item High false positive rate
+\end{itemize}
+
+\subsection{Evaluation metrics}
+
+Do tính imbalanced của LogAD, metrics phải được chọn cẩn thận:
+
+\subsubsection{Precision, Recall, F1-score}
+
+\begin{align}
+Precision &= \frac{TP}{TP + FP} \\
+Recall &= \frac{TP}{TP + FN} \\
+F1 &= \frac{2 \times Precision \times Recall}{Precision + Recall}
+\end{align}
+
+Trong đó:
+\begin{itemize}
+    \item TP (True Positive): Anomaly predicted đúng
+    \item FP (False Positive): Normal predicted nhầm là anomaly
+    \item FN (False Negative): Anomaly predicted nhầm là normal
+    \item TN (True Negative): Normal predicted đúng
+\end{itemize}
+
+\textbf{F1-score} là harmonic mean của Precision và Recall, cân bằng giữa hai metrics này. F1 được sử dụng làm \textbf{primary metric} trong nghiên cứu này.
+
+\subsubsection{PR-AUC (Precision-Recall Area Under Curve)}
+
+PR-AUC là diện tích dưới đường cong Precision-Recall. Metric này:
+\begin{itemize}
+    \item Threshold-independent (không phụ thuộc vào threshold cụ thể)
+    \item Phù hợp cho imbalanced data (hơn ROC-AUC)
+    \item Tổng hợp performance across all thresholds
+\end{itemize}
+
+\textbf{Range:} [0, 1], càng cao càng tốt.
+
+\subsubsection{False Positive Rate (FPR)}
+
+\begin{equation}
+FPR = \frac{FP}{FP + TN}
+\end{equation}
+
+FPR đo tỷ lệ false alarms. Trong production, high FPR gây ra:
+\begin{itemize}
+    \item Alarm fatigue (SREs ignore alerts)
+    \item Wasted investigation time
+    \item Reduced trust in system
+\end{itemize}
+
+\textbf{Goal:} FPR càng thấp càng tốt (thường <5\%).
+
+\subsubsection{Why not Accuracy?}
+
+Accuracy $= \frac{TP + TN}{TP + TN + FP + FN}$ là misleading cho imbalanced data.
+
+\textbf{Example (BGL with 12\% anomaly):}
+\begin{itemize}
+    \item Predict ALL logs as "Normal" → Accuracy = 88\%!
+    \item But Recall = 0\% (miss all anomalies)
+\end{itemize}
+
+Do đó, accuracy KHÔNG được sử dụng trong nghiên cứu này.
+
+\section{Tổng quan các phương pháp}
+\label{sec:methods-overview}
+
+Phần này giới thiệu tổng quan ba phương pháp được đánh giá trong luận văn. Chi tiết đầy đủ về implementation và reproduction được trình bày trong Chương 3.
+
+\subsection{LightAD: Classical Machine Learning}
+
+LightAD \cite{yu2024lightad} đại diện cho classical ML approach với ba models:
+
+\subsubsection{K-Nearest Neighbors (KNN)}
+
+\textbf{Idea:} Anomaly là samples "xa" với majority samples.
+
+\textbf{Algorithm:}
+\begin{enumerate}
+    \item Represent mỗi session bằng event count vector (bag-of-events)
+    \item For test sample, tìm $k$ nearest neighbors trong training set
+    \item Nếu majority neighbors là anomaly → Predict anomaly
+    \item Hoặc dùng average distance > threshold
+\end{enumerate}
+
+\textbf{Complexity:} O(n) inference (cần scan all training samples)
+
+\textbf{Explainability:} Có thể show nearest neighbors
+
+\subsubsection{Decision Tree (DT)}
+
+\textbf{Idea:} Học if-then rules để phân loại.
+
+\textbf{Advantages:}
+\begin{itemize}
+    \item Fast inference: O(log n)
+    \item Highly interpretable (rules dễ hiểu)
+    \item No assumption về distribution
+\end{itemize}
+
+\textbf{Explainability:} Decision path cung cấp rules rõ ràng
+
+\subsubsection{Single Layer Feedforward Network (SLFN)}
+
+\textbf{Idea:} Shallow neural network với 1 hidden layer.
+
+\textbf{Architecture:}
+\begin{verbatim}
+Input (event counts) → Hidden (100 neurons, ReLU) → Output (2 classes, Softmax)
+\end{verbatim}
+
+\textbf{Advantages:}
+\begin{itemize}
+    \item More expressive than linear models
+    \item Faster than deep networks
+\end{itemize}
+
+\textbf{Explainability:} Feature importance via gradients
+
+\subsection{LogFormer: Pre-trained Transformer}
+
+LogFormer \cite{guo2024logformer} áp dụng pre-training + adapter tuning paradigm.
+
+\subsubsection{Architecture}
+
+\textbf{Phase 1: Pre-training (Unsupervised)}
+\begin{itemize}
+    \item Train Transformer Encoder trên large unlabeled log corpus (50M logs)
+    \item Task: Masked Language Modeling (MLM) - predict masked log events
+    \item Goal: Learn general log patterns
+\end{itemize}
+
+\textbf{Phase 2: Adapter Tuning (Supervised)}
+\begin{itemize}
+    \item Freeze pre-trained weights
+    \item Insert lightweight adapter modules (~3M params)
+    \item Fine-tune chỉ adapters trên target dataset
+    \item Task: Binary classification (normal/anomaly)
+\end{itemize}
+
+\subsubsection{Advantages}
+
+\begin{itemize}
+    \item Transfer learning: Leverage knowledge từ nhiều datasets
+    \item Parameter-efficient: Chỉ tune 3M params thay vì 110M
+    \item Fast fine-tuning: 10-30 mins thay vì 4-8 hours
+    \item High accuracy: State-of-the-art trên nhiều benchmarks
+\end{itemize}
+
+\subsubsection{Explainability}
+
+Attention weights cho thấy model focus vào log events nào, nhưng khó interpret hơn Decision Tree rules.
+
+\subsection{LogRAG: LLM with Retrieval-Augmented Generation}
+
+LogRAG \cite{jiang2024lograg} kết hợp DeepSVDD + RAG + LLM.
+
+\subsubsection{Architecture}
+
+\textbf{Phase 1: Anomaly Candidate Detection (DeepSVDD)}
+\begin{itemize}
+    \item Train DeepSVDD (deep one-class SVM) trên mostly normal data
+    \item Learn hypersphere bao quanh normal samples
+    \item Output: Anomaly scores cho all samples
+    \item Select top-k samples với high scores làm candidates
+\end{itemize}
+
+\textbf{Phase 2: RAG-enhanced LLM Reasoning}
+\begin{itemize}
+    \item For mỗi candidate:
+    \begin{enumerate}
+        \item \textbf{Retrieval:} Tìm k=5 similar normal examples + k=5 similar anomaly examples (dùng FAISS)
+        \item \textbf{Augmentation:} Construct prompt với retrieved examples + query sample
+        \item \textbf{Generation:} LLM (GPT-3.5/GPT-4) generates reasoning + prediction
+    \end{enumerate}
+\end{itemize}
+
+\subsubsection{Advantages}
+
+\begin{itemize}
+    \item High accuracy: State-of-the-art F1 scores
+    \item Explainability: Natural language reasoning
+    \item Few-shot: Chỉ cần ít labeled examples (semi-supervised)
+    \item Semantic understanding: LLM hiểu ý nghĩa log messages
+\end{itemize}
+
+\subsubsection{Disadvantages}
+
+\begin{itemize}
+    \item High latency: 50-100ms per sample (LLM slow)
+    \item API cost: \$2-5 per 1K samples (GPT-3.5)
+    \item Hallucination risk: LLM có thể generate plausible but incorrect explanations
+\end{itemize}
+
+\section{Tóm tắt chương}
+
+Chương này đã trình bày các kiến thức nền tảng:
+
+\begin{itemize}
+    \item \textbf{Dữ liệu log:} 5 đặc điểm chính (semi-structured, non-stationary, high-velocity, imbalanced, contextual)
+    \item \textbf{Log parsing:} Drain algorithm để extract templates
+    \item \textbf{Datasets:} HDFS\_v1 (simple, controlled) và BGL (complex, natural) - complementary
+    \item \textbf{LogAD problem:} Định nghĩa, supervised/semi-supervised/unsupervised approaches
+    \item \textbf{Metrics:} Precision, Recall, F1, PR-AUC, FPR (không dùng accuracy)
+    \item \textbf{Phương pháp:} LightAD (classical ML), LogFormer (Transformer), LogRAG (LLM+RAG)
+\end{itemize}
+
+Chương tiếp theo (Chương 3) sẽ trình bày chi tiết phương pháp nghiên cứu và giao thức thực nghiệm.
