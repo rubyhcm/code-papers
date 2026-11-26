@@ -517,7 +517,7 @@ Mỗi baseline được ghi nhận:
 
 ### Bộ dữ liệu:
 12. Zhu, J., et al. (2023). *Loghub: A Large Collection of System Log Datasets for AI-driven Log Analytics.* ISSRE 2023.
-13. Zhou, X., et al. (2014). *TraceBench: An Open Data Set for Trace-oriented Monitoring.* CloudCom 2014. (HDFS_v1 dataset — Xu et al. 2009)
+13. Xu, W., et al. (2009). *Detecting Large-Scale System Problems by Mining Console Logs.* SOSP 2009. (HDFS_v1 original paper)
 14. Oliner, A. & Stearley, J. (2007). *What Supercomputers Say: A Study of Five System Logs.* DSN 2007. (BGL)
 
 ### Phương pháp luận:

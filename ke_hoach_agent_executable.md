@@ -226,7 +226,7 @@ sha256sum -c checksums.txt
 ```
 
 **Output:** 
-- `data/raw/hdfs_v1/` (expected: ~2.7 GB, 14.8M lines)
+- `data/raw/hdfs_v1/` (expected: ~1.5 GB, 11.2M lines)
 - `data/raw/bgl/` (expected: ~1.8 GB, 4.7M lines)
 - `data/README.md` (documentation)
 
